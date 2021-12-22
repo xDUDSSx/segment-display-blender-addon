@@ -1,0 +1,32 @@
+print ('Color S RGB  to Linear RFB')
+print ()
+ 
+def s2lin(x):
+	a = 0.055
+	if x <=0.04045 :
+		y = x * (1.0 / 12.92)
+	else:
+		y = pow( (x + a) * (1.0 / (1 + a)), 2.4)
+	return y
+ 
+x = 0.1
+ 
+z = s2lin(x)
+ 
+print ('x =', x, 'z =',z)
+print ()
+ 
+print ('Linear RGB  to   S RGB')
+print ()
+ 
+def lin2s(x):
+	a = 0.055
+	if x <=0.0031308:
+		y = x * 12.92
+	else:
+		y = (1 + a) * pow(x, 1 / 2.4) - a
+	return y
+ 
+x = 0.1
+ 
+z = lin2s(x)
