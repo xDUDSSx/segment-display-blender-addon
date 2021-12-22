@@ -7,14 +7,14 @@ from bpy.types import Scene, Image, ShaderNodeTree, ShaderNodeGroup
 
 bl_info = {
     "name": "segment-display-generator",
-    "description": "",
-    "author": "dudss",
+    "description": "An addon that generates fully working 7 segment displays in various formats to display numbers or time.",
+    "author": "DUDSS",
     "version": (0, 1),
-    "blender": (2, 91, 0),
+    "blender": (3, 0, 0),
     "location": "3D View > Right sidebar > Segment display",
     "warning": "",
-    "wiki_url": "",
-    "tracker_url": "",
+    "doc_url": "",
+    "tracker_url": "https://github.com/xDUDSSx/segment-display-blender-addon",
     "category": "3D View"
 }
 
@@ -60,11 +60,13 @@ class SegmentAddonData(bpy.types.PropertyGroup):
     )
 
     # Display value
+    # Display value numeric
     display_value_numeric: bpy.props.EnumProperty(
-        name = "Display value",
+        name = "Numeric display value",
         items = [
             ("number", "Number", "Show a specific decimal value"),
             ("frame", "Frame", "Show the current animation frame"),
+            ("timer", "Timer", "Animate the display to go from one value to another"),
         ]
     )
     number: bpy.props.FloatProperty(
@@ -72,11 +74,90 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         min = 0,
         default = 43.12
     )
-    frame_divisor: bpy.props.IntProperty(
+    frame_divisor: bpy.props.FloatProperty(
         name = "Divisor",
-        min = 1,
+        min = 0,
         default = 1,
-        description = "What number to divide the frame number with. Since frames are integers to get changing fractional part use a divisor like 1.237"
+        description = "What number to divide the frame number with. Since frames are integers to get a changing fractional part use a divisor like 1.237"
+    )
+    frame_offset: bpy.props.IntProperty(
+        name = "Frame offset",
+        default = 0,
+        description = "Offsets the current frame number by an amount (Can be negative)"
+    )
+    timer_number_from: bpy.props.FloatProperty(
+        name = "From number",
+        min = 0,
+        default = 1
+    )
+    timer_number_to: bpy.props.FloatProperty(
+        name = "To number",
+        min = 0,
+        default = 50
+    )
+    timer_frame_start: bpy.props.IntProperty(
+        name = "Frame Start",
+        min = 0,
+        default = 50
+    )
+    timer_frame_end: bpy.props.IntProperty(
+        name = "End",
+        min = 0,
+        default = 250
+    )
+
+    # Display value clock
+    display_value_clock: bpy.props.EnumProperty(
+        name = "Clock display value ",
+        items = [
+            ("seconds", "Seconds", "Show a specific time for a number of seconds"),
+            ("time", "Time", "Show a specific time"),
+            ("frame", "Frame", "Show the current animation frame converted to time in seconds"),
+            ("timer", "Timer", "Animate the display count down/up from one time to another"),
+        ]
+    )
+    hours: bpy.props.IntProperty(
+        name = "Hours",
+        min = 0,
+        default = 12
+    )
+    minutes: bpy.props.IntProperty(
+        name = "Minutes",
+        min = 0, max = 59,
+        default = 32
+    )
+    seconds: bpy.props.IntProperty(
+        name = "Seconds",
+        min = 0, max = 59,
+        default = 5
+    )
+    milliseconds: bpy.props.IntProperty(
+        name = "Milliseconds",
+        min = 0,
+        default = 374
+    )
+    number_of_seconds: bpy.props.FloatProperty(
+        name = "Seconds",
+        min = 0,
+        default = 3666.143
+    )
+    clock_frame_divisor: bpy.props.FloatProperty(
+        name = "Divisor",
+        min = 0,
+        default = 1,
+        description = "What number to divide the frame number with. This can be set to the current FPS to show realtime animation time."
+    )
+    timer_time_from: bpy.props.FloatProperty(
+        name = "From time",
+        min = 0,
+        default = 90,
+        description = "The initial time in seconds"
+    )
+    timer_time_to: bpy.props.FloatProperty(
+        name = "To time",
+        min = 0,
+        default = 0,
+        description = "The target time in seconds"
     )
 
     #Advanced
@@ -152,16 +233,56 @@ class DisplayValuePanel(SegmentPanel, bpy.types.Panel):
         scene = context.scene
         data = scene.segment_addon_data
 
-        layout.prop(data, "display_value_numeric", expand=True)
+        if data.display_type == "numeric":
+            layout.prop(data, "display_value_numeric", expand=True)
 
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        col = layout.column(align=True)
+            layout.use_property_split = True
+            layout.use_property_decorate = False
+            col = layout.column(align=True)
 
-        if data.display_value_numeric == "number":
-            col.prop(data, "number")
-        elif data.display_value_numeric == "frame":
-            col.prop(data, "frame_divisor")
+            if data.display_value_numeric == "number":
+                col.prop(data, "number")
+            elif data.display_value_numeric == "frame":
+                col.prop(data, "frame_divisor")
+                col.prop(data, "frame_offset")
+            elif data.display_value_numeric == "timer":
+                col.prop(data, "timer_number_from")
+                col.prop(data, "timer_number_to")
+                col.separator()
+                col.prop(data, "timer_frame_start")
+                col.prop(data, "timer_frame_end")
+
+        elif data.display_type == "clock":
+            layout.prop(data, "display_value_clock", expand=True)
+
+            if data.display_value_clock == "seconds":
+                layout.use_property_split = True
+                layout.use_property_decorate = False
+                col = layout.column(align=True)
+                col.prop(data, "number_of_seconds")
+            elif data.display_value_clock == "time":
+                row = layout.row(align=True)
+                row.label(text="Time to show (H, M, S, Ms):", icon="TIME")
+                row = layout.row(align=True)
+                row.prop(data, "hours", text="")
+                row.prop(data, "minutes", text="")
+                row.prop(data, "seconds", text="")
+                row.prop(data, "milliseconds", text="")
+            elif data.display_value_clock == "frame":
+                layout.use_property_split = True
+                layout.use_property_decorate = False
+                col = layout.column(align=True)
+                col.prop(data, "clock_frame_divisor")
+                col.prop(data, "frame_offset")
+            elif data.display_value_clock == "timer":
+                layout.use_property_split = True
+                layout.use_property_decorate = False
+                col = layout.column(align=True)
+                col.prop(data, "timer_time_from")
+                col.prop(data, "timer_time_to")
+                col.separator()
+                col.prop(data, "timer_frame_start")
+                col.prop(data, "timer_frame_end")
 
 
 class DisplayAppearancePanel(SegmentPanel, bpy.types.Panel):
@@ -234,7 +355,7 @@ class CreateDisplayOperator(bpy.types.Operator):
             data_dst.meshes = ['segment_digit_mesh']
             data_dst.objects = ['segment_digit']
             data_dst.materials = ['7segmentLCD', '7segmentLCD_background']
-            data_dst.node_groups = ['7SegmentDecimalProcessor', '7SegmentClockProcessor']
+            data_dst.node_groups = ['7SegmentDecimalProcessor', '7SegmentClockProcessor', '7SegmentTimerResolver']
 
         resource = data_dst
 
@@ -315,17 +436,28 @@ class SegmentAddon:
         """
         Sets up the 7SegmentBase number input to reflect display value settings.
         """
-        if self.data.display_type == 'numeric':
-            if self.data.display_value_numeric == 'number':
-                self.setup_numeric_number_display_value(mat)
-            elif self.data.display_value_numeric == 'frame':
-                self.setup_numeric_frame_display_value(mat)
+        if self.data.display_type == "numeric":
+            if self.data.display_value_numeric == "number":
+                self.setup_numeric_number_display_value(mat, self.data.number)
+            elif self.data.display_value_numeric == "frame":
+                self.setup_numeric_frame_display_value(mat, self.data.frame_divisor)
+            elif self.data.display_value_numeric == "timer":
+                self.setup_numeric_timer_display_value(mat, self.data.timer_number_from, self.data.timer_number_to)
         elif self.data.display_type == 'clock':
-            pass
+            if self.data.display_value_clock == "seconds":
+                self.setup_numeric_number_display_value(mat, self.data.number_of_seconds)
+            elif self.data.display_value_clock == "time":
+                self.setup_clock_time_display_value(mat)
+            elif self.data.display_value_clock == "frame":
+                self.setup_numeric_frame_display_value(mat, self.data.clock_frame_divisor)
+            elif self.data.display_value_clock == "timer":
+                self.setup_numeric_timer_display_value(mat, self.data.timer_time_from, self.data.timer_time_to)
 
-    def setup_numeric_number_display_value(self, mat):
+    def setup_numeric_number_display_value(self, mat, number):
+        """
+        Connects a simple value node to the number input.
+        """
         # Get number from the settings and set it as input for the segment base group
-        number = self.data.number
         value_node = mat.node_tree.nodes.new(type="ShaderNodeValue")
         segment_base_group = mat.node_tree.nodes['segment_base']
 
@@ -336,14 +468,55 @@ class SegmentAddon:
         # Set divisor to 1
         mat.node_tree.nodes["segment_base"].inputs[1].default_value = 1
 
-    def setup_numeric_frame_display_value(self, mat):
-        frame_node = Utils.create_frame_value_node(mat.node_tree)
+    def setup_numeric_frame_display_value(self, mat, divisor):
+        """
+        Connects an animated frame value node to the number input.
+        """
+        frame_node = Utils.create_frame_value_node(mat.node_tree, self.data.frame_offset)
         segment_base_group = mat.node_tree.nodes['segment_base']
 
         mat.node_tree.links.new(frame_node.outputs[0], segment_base_group.inputs[0])
-        mat.node_tree.nodes["segment_base"].inputs[1].default_value = self.data.frame_divisor
+        mat.node_tree.nodes["segment_base"].inputs[1].default_value = divisor
 
         Utils.move_node(frame_node, 450, 300)
+
+    def setup_numeric_timer_display_value(self, mat, from_value, to_value):
+        """
+        Timer is realized by running the frame value through the 7SegmentTimerResolver node.
+        """
+        print("MARK MARK MARK")
+        # Create frame node
+        frame_node = Utils.create_frame_value_node(mat.node_tree)
+        segment_base_group = mat.node_tree.nodes['segment_base']
+        Utils.move_node(frame_node, 450-190, 300)
+
+        # Create timer resolver group
+        timer_resolver_tree = self.resource.node_groups[2]
+        timer_resolver_group = mat.node_tree.nodes.new(type='ShaderNodeGroup')
+        timer_resolver_group.node_tree = timer_resolver_tree
+        timer_resolver_group.name = "7SegmentTimerResolver"
+        Utils.move_node(timer_resolver_group, 463, 370)
+
+        # Link nodes
+        mat.node_tree.links.new(frame_node.outputs[0], timer_resolver_group.inputs[4])
+        mat.node_tree.links.new(timer_resolver_group.outputs[0], segment_base_group.inputs[0])
+
+        # Set divisor to 1
+        mat.node_tree.nodes["segment_base"].inputs[1].default_value = 1
+
+        # Set remaining timer resolver inputs according to settings
+        timer_resolver_group.inputs[0].default_value = from_value
+        timer_resolver_group.inputs[1].default_value = to_value
+        timer_resolver_group.inputs[2].default_value = self.data.timer_frame_start
+        timer_resolver_group.inputs[3].default_value = self.data.timer_frame_end
+
+    def setup_clock_time_display_value(self, mat):
+        hours = self.data.hours
+        minutes = self.data.hours
+        seconds = self.data.hours
+        milliseconds = self.data.hours
+        number = hours * 3600 + minutes * 60 + seconds + (milliseconds/1000)
+        self.setup_numeric_number_display_value(mat, number)
 
     def setup_segment_display_processor(self, mat):
         """
@@ -430,9 +603,9 @@ class Utils:
         node.location = node.location[0] + dx, node.location[1] + dy
 
     @staticmethod
-    def create_frame_value_node(node_tree):
+    def create_frame_value_node(node_tree, offset=0):
         value_node = node_tree.nodes.new('ShaderNodeValue')
-        Utils.create_expression_driver(value_node.outputs[0], 'default_value', 'frame')
+        Utils.create_expression_driver(value_node.outputs[0], 'default_value', 'frame' if offset == 0 else ('frame+'+str(offset)))
         value_node.label = "frame"
         return value_node
 
