@@ -168,7 +168,42 @@ class SegmentAddonData(bpy.types.PropertyGroup):
 
     # Appeareance
     ############################################################################
-
+    digit_foreground: bpy.props.FloatVectorProperty(
+        name="Digit foreground",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0),
+        min=0.0, max=1.0,
+        description="Color of the lit digit segments"
+    )
+    digit_background: bpy.props.FloatVectorProperty(
+        name="Digit background",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0),
+        min=0.0, max=1.0,
+        description="Color of the unlit digit segments"
+    )
+    background: bpy.props.FloatVectorProperty(
+        name="Background",
+        subtype='COLOR',
+        default=(1.0, 1.0, 1.0),
+        min=0.0, max=1.0,
+        description="Color of the display background"
+    )
+    hide_background: bpy.props.BoolProperty(
+        name = "Hide background",
+        default = False,
+        description="Deletes the faces making up the background, leaving just the digit segments"
+    )
+    normal_strength: bpy.props.FloatProperty(
+        name = "Normal strength",
+        min = 0,
+        default = 0.5
+    )
+    skew: bpy.props.FloatProperty(
+        name = "Skew",
+        default = 0,
+        description = "Skews the display"
+    )
 
     # Advanced
     ############################################################################
@@ -310,6 +345,19 @@ class DisplayAppearancePanel(SegmentPanel, bpy.types.Panel):
         layout = self.layout
         scene = context.scene
         data = scene.segment_addon_data
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        col = layout.column(align=True)
+        col.prop(data, "digit_foreground")
+        col.prop(data, "digit_background")
+        col.separator()
+        col.prop(data, "background")
+        col.prop(data, "hide_background")
+        col.separator()
+        col.prop(data, "normal_strength")
+        col.prop(data, "skew")
 
         layout.label(text="Display style")
         layout.template_icon_view(context.window_manager, "segment_addon_styles", show_labels=True)
@@ -662,7 +710,16 @@ class Utils:
             y = (1 + a) * pow(x, 1 / 2.4) - a
         return y
 
+
 classes = [MainPanel, DisplayTypePanel, DisplayValuePanel, DisplayAppearancePanel, AdvancedPanel, GeneratePanel, SegmentAddonData, CreateDisplayOperator]
+
+def load_preview(pcoll, name, filepath, type):
+    if not name in pcoll.keys():
+        return pcoll.load(name, filepath, type)
+    else:
+        print("Preview '" + name +"' already exists!")
+        return pcoll[name]
+
 
 def generate_style_previews():
     directory = SegmentAddon.style_previews_dir
@@ -677,8 +734,14 @@ def generate_style_previews():
 
     for i, style in enumerate(to_load):
         filepath = os.path.join(directory, style[2])
-        thumb = pcoll.load(filepath, filepath, 'IMAGE')
-        items.append((style[0], style[1], "", thumb.icon_id, i))
+        if not filepath in pcoll.keys():
+            thumb = None
+            if os.path.exists(filepath):
+                thumb = load_preview(pcoll, filepath, filepath, 'IMAGE')
+            else:
+                filepath = os.path.join(directory, "missing.png")
+                thumb = load_preview(pcoll, filepath, filepath, 'IMAGE')
+            items.append((style[0], style[1], "", thumb.icon_id, i))
 
     return items
 
