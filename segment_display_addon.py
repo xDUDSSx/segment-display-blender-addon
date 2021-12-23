@@ -3,7 +3,7 @@ import typing
 import copy
 import os
 import mathutils
-from bpy.types import Scene, Image, ShaderNodeTree, ShaderNodeGroup
+from bpy.types import Scene, WindowManager, Image, ShaderNodeTree, ShaderNodeGroup
 
 bl_info = {
     "name": "segment-display-generator",
@@ -18,8 +18,13 @@ bl_info = {
     "category": "3D View"
 }
 
+############################################################################
+# DATA
+############################################################################
+
 class SegmentAddonData(bpy.types.PropertyGroup):
     # Display type
+    ############################################################################
     display_type: bpy.props.EnumProperty(
         name = "Display type",
         items = [
@@ -60,6 +65,7 @@ class SegmentAddonData(bpy.types.PropertyGroup):
     )
 
     # Display value
+    ############################################################################
     # Display value numeric
     display_value_numeric: bpy.props.EnumProperty(
         name = "Numeric display value",
@@ -160,7 +166,12 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         description = "The target time in seconds"
     )
 
-    #Advanced
+    # Appeareance
+    ############################################################################
+
+
+    # Advanced
+    ############################################################################
     float_correction: bpy.props.FloatProperty(
         name = "Float correction",
         min = 0,
@@ -171,6 +182,10 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         default = True
     )
 
+
+############################################################################
+# UI
+############################################################################
 
 class SegmentPanel():
     bl_space_type = 'VIEW_3D'
@@ -296,7 +311,8 @@ class DisplayAppearancePanel(SegmentPanel, bpy.types.Panel):
         scene = context.scene
         data = scene.segment_addon_data
 
-        layout.label(text="Test")
+        layout.label(text="Display style")
+        layout.template_icon_view(context.window_manager, "segment_addon_styles", show_labels=True)
 
 
 class AdvancedPanel(SegmentPanel, bpy.types.Panel):
@@ -332,6 +348,10 @@ class GeneratePanel(SegmentPanel, bpy.types.Panel):
         layout.operator("segment_addon.create", icon="RESTRICT_VIEW_OFF")
 
 
+############################################################################
+# OPERATORS
+############################################################################
+
 class CreateDisplayOperator(bpy.types.Operator):
     bl_idname = "segment_addon.create"
     bl_label = "Create display"
@@ -343,15 +363,11 @@ class CreateDisplayOperator(bpy.types.Operator):
         data = scene.segment_addon_data
 
         print(f"Creating segment display [digits: {data.digits}]")
-
-        #file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'resources/segment.blend')
-        file_path = 'D:\\Blender\\Projects\\7SegmentDisplay\\resources\\segment.blend'
-        print("File path: " + file_path)
-
+        print("Blend file path: " + SegmentAddon.addon_blend_path)
 
         # Load resources from the segment blend file
         link = False
-        with bpy.data.libraries.load(file_path, link=link) as (data_src, data_dst):
+        with bpy.data.libraries.load(SegmentAddon.addon_blend_path, link=link) as (data_src, data_dst):
             data_dst.meshes = ['segment_digit_mesh']
             data_dst.objects = ['segment_digit']
             data_dst.materials = ['7segmentLCD', '7segmentLCD_background']
@@ -384,6 +400,14 @@ class SegmentAddon:
     VC_STEP_FAILSAFE = 0.01
     DIGIT_WIDTH = 12
     DIGIT_SEPARATOR_WIDTH = 3
+
+    addon_directory_path = None
+    addon_resources_dir = None
+    addon_blend_path = None
+    style_previews_dir = None
+
+    previews = dict()
+    style_previews = "styles_preview"
 
     def __init__(self, data: SegmentAddonData, resource):
         self.data = data
@@ -638,22 +662,64 @@ class Utils:
             y = (1 + a) * pow(x, 1 / 2.4) - a
         return y
 
-
 classes = [MainPanel, DisplayTypePanel, DisplayValuePanel, DisplayAppearancePanel, AdvancedPanel, GeneratePanel, SegmentAddonData, CreateDisplayOperator]
 
+def generate_style_previews():
+    directory = SegmentAddon.style_previews_dir
+    pcoll = SegmentAddon.previews[SegmentAddon.style_previews]
+    print("Loading style previews from directory: " + directory)
+
+    items = []
+    to_load = [
+        ["plain", "Plain", "angery.png"],
+        ["classic", "Classic", "hmm.png"],
+    ]
+
+    for i, style in enumerate(to_load):
+        filepath = os.path.join(directory, style[2])
+        thumb = pcoll.load(filepath, filepath, 'IMAGE')
+        items.append((style[0], style[1], "", thumb.icon_id, i))
+
+    return items
+
+
 def register():
+    print("SegmentAddon: Registering")
+    print("")
     from bpy.utils import register_class
     for cls in classes:
-       register_class(cls)
+        register_class(cls)
 
-    bpy.types.Scene.segment_addon_data = bpy.props.PointerProperty(type=SegmentAddonData)
+    SegmentAddon.addon_directory_path = os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]
+    SegmentAddon.addon_resources_dir = os.path.join(SegmentAddon.addon_directory_path, 'resources')
+    SegmentAddon.addon_blend_path = os.path.join(SegmentAddon.addon_resources_dir, 'segment.blend')
+    SegmentAddon.style_previews_dir = os.path.join(SegmentAddon.addon_resources_dir, 'styles')
+
+    print("Segment addon dir: " + SegmentAddon.addon_directory_path)
+    print("Segment resource dir: " + SegmentAddon.addon_resources_dir)
+    print("Segment blend path: " + SegmentAddon.addon_blend_path)
+    print("Segment style previews dir: " + SegmentAddon.style_previews_dir)
+
+    Scene.segment_addon_data = bpy.props.PointerProperty(type=SegmentAddonData)
+
+    SegmentAddon.previews[SegmentAddon.style_previews] = bpy.utils.previews.new()
+    style_previews = generate_style_previews()
+    WindowManager.segment_addon_styles = bpy.props.EnumProperty(
+        items=style_previews
+    )
+
 
 def unregister():
     from bpy.utils import unregister_class
     for cls in reversed(classes):
-       unregister_class(cls)
+        unregister_class(cls)
 
-    del bpy.types.Scene.segment_addon_data
+    for preview in SegmentAddon.previews.values():
+        bpy.utils.previews.remove(preview)
+    SegmentAddon.previews.clear()
+
+    del Scene.segment_addon_data
+
 
 if __name__ == "__main__":
     register()
