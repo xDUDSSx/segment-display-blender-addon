@@ -18,13 +18,13 @@ bl_info = {
     "category": "3D View"
 }
 
-############################################################################
+################################################################################
 # DATA
-############################################################################
+################################################################################
 
 class SegmentAddonData(bpy.types.PropertyGroup):
     # Display type
-    ############################################################################
+    ########################################################################
     display_type: bpy.props.EnumProperty(
         name = "Display type",
         items = [
@@ -65,7 +65,7 @@ class SegmentAddonData(bpy.types.PropertyGroup):
     )
 
     # Display value
-    ############################################################################
+    ########################################################################
     # Display value numeric
     display_value_numeric: bpy.props.EnumProperty(
         name = "Numeric display value",
@@ -167,7 +167,7 @@ class SegmentAddonData(bpy.types.PropertyGroup):
     )
 
     # Appeareance
-    ############################################################################
+    ########################################################################
     digit_foreground: bpy.props.FloatVectorProperty(
         name="Digit foreground",
         subtype='COLOR',
@@ -189,24 +189,41 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         min=0.0, max=1.0,
         description="Color of the display background"
     )
-    hide_background: bpy.props.BoolProperty(
-        name = "Hide background",
-        default = False,
-        description="Deletes the faces making up the background, leaving just the digit segments"
+    emission_strength: bpy.props.FloatProperty(
+        name = "Emission strength",
+        min = 0,
+        default = 2.5
     )
     normal_strength: bpy.props.FloatProperty(
         name = "Normal strength",
         min = 0,
         default = 0.5
     )
+    hide_background: bpy.props.BoolProperty(
+        name = "Hide background",
+        default = False,
+        description="Deletes the faces making up the background, leaving just the digit segments"
+    )
     skew: bpy.props.FloatProperty(
         name = "Skew",
         default = 0,
         description = "Skews the display"
     )
+    #style: bpy.props.EnumProperty - Set during register()
+
+    # Classic style
+    background_noise_enabled: bpy.props.BoolProperty(
+        name = "Background noise",
+        default = True
+    )
+    background_noise_scale: bpy.props.FloatProperty(
+        name = "Background noise scale",
+        default = 2
+    )
+
 
     # Advanced
-    ############################################################################
+    ########################################################################
     float_correction: bpy.props.FloatProperty(
         name = "Float correction",
         min = 0,
@@ -218,9 +235,9 @@ class SegmentAddonData(bpy.types.PropertyGroup):
     )
 
 
-############################################################################
+################################################################################
 # UI
-############################################################################
+################################################################################
 
 class SegmentPanel():
     bl_space_type = 'VIEW_3D'
@@ -352,6 +369,7 @@ class DisplayAppearancePanel(SegmentPanel, bpy.types.Panel):
         col = layout.column(align=True)
         col.prop(data, "digit_foreground")
         col.prop(data, "digit_background")
+        col.prop(data, "emission_strength")
         col.separator()
         col.prop(data, "background")
         col.prop(data, "hide_background")
@@ -360,7 +378,7 @@ class DisplayAppearancePanel(SegmentPanel, bpy.types.Panel):
         col.prop(data, "skew")
 
         layout.label(text="Display style")
-        layout.template_icon_view(context.window_manager, "segment_addon_styles", show_labels=True)
+        layout.template_icon_view(data, "style", show_labels=True)
 
 
 class AdvancedPanel(SegmentPanel, bpy.types.Panel):
@@ -396,9 +414,9 @@ class GeneratePanel(SegmentPanel, bpy.types.Panel):
         layout.operator("segment_addon.create", icon="RESTRICT_VIEW_OFF")
 
 
-############################################################################
+################################################################################
 # OPERATORS
-############################################################################
+################################################################################
 
 class CreateDisplayOperator(bpy.types.Operator):
     bl_idname = "segment_addon.create"
@@ -418,12 +436,15 @@ class CreateDisplayOperator(bpy.types.Operator):
         with bpy.data.libraries.load(SegmentAddon.addon_blend_path, link=link) as (data_src, data_dst):
             data_dst.meshes = ['segment_digit_mesh']
             data_dst.objects = ['segment_digit']
-            data_dst.materials = ['7segmentLCD', '7segmentLCD_background']
-            data_dst.node_groups = ['7SegmentDecimalProcessor', '7SegmentClockProcessor', '7SegmentTimerResolver']
-
+            data_dst.materials = ['7SegmentDisplay', '7SegmentDisplayBackground']
+            data_dst.node_groups =  [
+                                    '7SegmentDecimalProcessor', '7SegmentClockProcessor',
+                                    '7SegmentTimerResolver',
+                                    '7SegmentClassicShader'
+                                    ]
         resource = data_dst
 
-        segment_addon = SegmentAddon(data, resource)
+        segment_addon = SegmentAddon(context, data, resource)
         if not segment_addon.validate_data():
             msg = "SegmentDisplayAddon: Invalid display type!"
             print(msg)
@@ -443,6 +464,10 @@ class CreateDisplayOperator(bpy.types.Operator):
         return {'FINISHED'}
 
 
+################################################################################
+# CORE
+################################################################################
+
 class SegmentAddon:
     VC_STEP = 0.1
     VC_STEP_FAILSAFE = 0.01
@@ -457,7 +482,8 @@ class SegmentAddon:
     previews = dict()
     style_previews = "styles_preview"
 
-    def __init__(self, data: SegmentAddonData, resource):
+    def __init__(self, context, data: SegmentAddonData, resource):
+        self.context = context
         self.data = data
         self.resource = resource
 
@@ -501,8 +527,56 @@ class SegmentAddon:
         mat = self.resource.materials[0]
         self.setup_segment_display_processor(mat)
         self.setup_display_value(mat)
+        self.setup_display_shader(mat)
         # Float correction
         mat.node_tree.nodes["segment_base"].inputs[2].default_value = self.data.float_correction
+
+    def setup_display_shader(self, mat):
+        """
+        Sets up the node group responsible for styling the segment base mask output.
+        This is referred to as "display style" in the settings.
+        """
+        # Create the appropriate shader depending on settings
+        shader_node_group = self.create_display_style_shader(mat)
+        Utils.move_node(shader_node_group, 1020, 671)
+        shader_node_group.width = 212
+
+        # Connect mask to the shader group
+        mat.node_tree.links.new(mat.node_tree.nodes['segment_base'].outputs[0], shader_node_group.inputs[0])
+
+        # Set style specific settings
+        if self.data.style == "plain":
+            pass
+        elif self.data.style == "classic":
+            shader_node_group.inputs[4].default_value = self.data.background_noise_enabled
+            shader_node_group.inputs[5].default_value = self.data.background_noise_scale
+
+        # Set common settings
+        shader_node_group.inputs[1].default_value = (self.data.digit_foreground.r, self.data.digit_foreground.g, self.data.digit_foreground.b, 1.0)
+        shader_node_group.inputs[2].default_value = (self.data.digit_background.r, self.data.digit_background.g, self.data.digit_background.b, 1.0)
+        shader_node_group.inputs[3].default_value = self.data.emission_strength
+        shader_node_group.inputs[4].default_value = self.data.normal_strength
+
+        # Connect the shader group to the principled shader
+        principled = mat.node_tree.nodes['segment_principled']
+        mat.node_tree.links.new(shader_node_group.outputs[0], principled.inputs[0]) # Base
+        mat.node_tree.links.new(shader_node_group.outputs[1], principled.inputs[9]) # Roughness
+        mat.node_tree.links.new(shader_node_group.outputs[2], principled.inputs[19]) # Emission
+        mat.node_tree.links.new(shader_node_group.outputs[3], principled.inputs[20]) # Emission strength
+        mat.node_tree.links.new(shader_node_group.outputs[4], principled.inputs[22]) # Normal
+
+    def create_display_style_shader(self, mat):
+        node_tree = None
+
+        if self.data.style == "plain":
+            node_tree = None
+        elif self.data.style == "classic":
+            node_tree = self.resource.node_groups[3]
+
+        node_group = mat.node_tree.nodes.new(type='ShaderNodeGroup')
+        node_group.node_tree = node_tree
+        node_group.name = node_tree.name
+        return node_group
 
     def setup_display_value(self, mat):
         """
@@ -711,6 +785,10 @@ class Utils:
         return y
 
 
+################################################################################
+# ADDON
+################################################################################
+
 classes = [MainPanel, DisplayTypePanel, DisplayValuePanel, DisplayAppearancePanel, AdvancedPanel, GeneratePanel, SegmentAddonData, CreateDisplayOperator]
 
 def load_preview(pcoll, name, filepath, type):
@@ -765,9 +843,10 @@ def register():
 
     Scene.segment_addon_data = bpy.props.PointerProperty(type=SegmentAddonData)
 
+    # Create the display style enum
     SegmentAddon.previews[SegmentAddon.style_previews] = bpy.utils.previews.new()
     style_previews = generate_style_previews()
-    WindowManager.segment_addon_styles = bpy.props.EnumProperty(
+    SegmentAddonData.style = bpy.props.EnumProperty(
         items=style_previews
     )
 
