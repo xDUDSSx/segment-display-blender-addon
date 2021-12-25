@@ -64,6 +64,17 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         default = 0
     )
 
+    show_dot: bpy.props.BoolProperty(
+        name = "Show dot",
+        default = True,
+        description="Show decimal or millisecond dot separator"
+    )
+    show_colons: bpy.props.BoolProperty(
+        name = "Show colons",
+        default = True,
+        description="Separate clock digits with colons"
+    )
+
     # Display value
     ########################################################################
     # Display value numeric
@@ -182,10 +193,15 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         min=0.0, max=1.0,
         description="Color of the unlit digit segments"
     )
+    digit_background_override: bpy.props.BoolProperty(
+        name = "Set manually",
+        description = "Specify the digit background. Otherwise it is determined from the foreground color",
+        default = False
+    )
     background: bpy.props.FloatVectorProperty(
         name="Background",
         subtype='COLOR',
-        default=(1.0, 1.0, 1.0),
+        default=(0.0, 0.0, 0.0),
         min=0.0, max=1.0,
         description="Color of the display background"
     )
@@ -303,7 +319,7 @@ class MainPanel(SegmentPanel, bpy.types.Panel):
         layout.label(text="Generate 7 segment displays", icon="INFO")
 
 class DisplayTypePanel(SegmentPanel, bpy.types.Panel):
-    bl_label = "Display type"
+    bl_label = "Display type / format"
     bl_idname = "SEGMENT_PT_display_type_panel"
     bl_parent_id = "SEGMENT_PT_main_panel"
     #bl_options = {'DEFAULT_CLOSED'}
@@ -322,11 +338,16 @@ class DisplayTypePanel(SegmentPanel, bpy.types.Panel):
         if data.display_type == "numeric":
             col.prop(data, "digits")
             col.prop(data, "fraction_digits")
+            col.separator()
+            col.prop(data, "show_dot")
         elif data.display_type == "clock":
             col.prop(data, "hour_digits")
             col.prop(data, "minute_digits")
             col.prop(data, "second_digits")
             col.prop(data, "millisecond_digits")
+            col.separator()
+            col.prop(data, "show_dot")
+            col.prop(data, "show_colons")
 
 
 class DisplayValuePanel(SegmentPanel, bpy.types.Panel):
@@ -408,7 +429,10 @@ class DisplayAppearancePanel(SegmentPanel, bpy.types.Panel):
 
         col = layout.column(align=True)
         col.prop(data, "digit_foreground")
-        col.prop(data, "digit_background")
+        col2 = col.column(align=True)
+        col2.enabled = data.digit_background_override
+        col2.prop(data, "digit_background")
+        col.prop(data, "digit_background_override")
         col.prop(data, "emission_strength")
         col.separator()
         col.prop(data, "background")
@@ -502,8 +526,8 @@ class CreateDisplayOperator(bpy.types.Operator):
         # Load resources from the segment blend file
         link = False
         with bpy.data.libraries.load(SegmentAddon.addon_blend_path, link=link) as (data_src, data_dst):
-            data_dst.meshes = ['segment_digit_mesh']
-            data_dst.objects = ['segment_digit']
+            #data_dst.meshes = ['segment_digit_mesh']
+            data_dst.objects = ['segment_digit', 'segment_empty', 'segment_dot', 'segment_colon']
             data_dst.materials = ['7SegmentDisplay', '7SegmentDisplayBackground']
             data_dst.node_groups =  [
                                     '7SegmentDecimalProcessor', '7SegmentClockProcessor',
@@ -567,13 +591,12 @@ class SegmentAddon:
     def create_numeric_display(self, digit_prototype):
         offset_step = self.DIGIT_WIDTH
         offset = 0
-        for i in range(0, self.data.fraction_digits):
-            self.create_digit(digit_prototype, offset, self.data.fraction_digits/10.0, self.VC_STEP*i)
-            offset -= offset_step
-        offset -= self.DIGIT_SEPARATOR_WIDTH
-        for i in range(0, self.data.digits):
-            self.create_digit(digit_prototype, offset, 0, self.VC_STEP*i)
-            offset -= offset_step
+
+        offset = self.create_digits(digit_prototype, offset, self.data.fraction_digits/10.0, self.data.fraction_digits, offset_step)
+        if self.data.fraction_digits > 0:
+            self.create_dot(offset)
+            offset -= self.DIGIT_SEPARATOR_WIDTH
+        offset = self.create_digits(digit_prototype, offset, 0, self.data.digits, offset_step)
 
     def create_clock_display(self, digit_prototype):
         offset_step = self.DIGIT_WIDTH
@@ -581,12 +604,15 @@ class SegmentAddon:
 
         if self.data.millisecond_digits > 0:
             offset = self.create_digits(digit_prototype, offset, 0, self.data.millisecond_digits, offset_step)
+            self.create_dot(offset)
             offset -= self.DIGIT_SEPARATOR_WIDTH
         if self.data.second_digits > 0:
             offset = self.create_digits(digit_prototype, offset, 0.1, self.data.second_digits, offset_step)
+            self.create_colon(offset)
             offset -= self.DIGIT_SEPARATOR_WIDTH
         if self.data.minute_digits > 0:
             offset = self.create_digits(digit_prototype, offset, 0.2, self.data.minute_digits, offset_step)
+            self.create_colon(offset)
             offset -= self.DIGIT_SEPARATOR_WIDTH
         if self.data.hour_digits > 0:
             offset = self.create_digits(digit_prototype, offset, 0.3, self.data.hour_digits, offset_step)
@@ -596,8 +622,15 @@ class SegmentAddon:
         self.setup_segment_display_processor(mat)
         self.setup_display_value(mat)
         self.setup_display_shader(mat)
+
+        bg_mat = self.resource.materials[1]
+        self.setup_background_material(bg_mat)
+
         # Float correction
         mat.node_tree.nodes["segment_base"].inputs[2].default_value = self.data.float_correction
+
+    def setup_background_material(self, mat):
+        mat.node_tree.nodes['RGB'].outputs[0].default_value = (self.data.background.r, self.data.background.g, self.data.background.b, 1.0)
 
     def setup_display_shader(self, mat):
         """
@@ -637,8 +670,13 @@ class SegmentAddon:
                 cell_y_ramp.color_ramp.elements[i+1].position = p
 
         # Set common settings
-        shader_node_group.inputs[1].default_value = (self.data.digit_foreground.r, self.data.digit_foreground.g, self.data.digit_foreground.b, 1.0)
-        shader_node_group.inputs[2].default_value = (self.data.digit_background.r, self.data.digit_background.g, self.data.digit_background.b, 1.0)
+        digit_foreground = self.color_property_to_rgba_tuple(self.data.digit_foreground)
+        digit_background = self.color_property_to_rgba_tuple(self.data.digit_background)
+        if not self.data.digit_background_override:
+            digit_background = digit_foreground
+
+        shader_node_group.inputs[1].default_value = digit_foreground
+        shader_node_group.inputs[2].default_value = digit_background
         shader_node_group.inputs[3].default_value = self.data.emission_strength
         shader_node_group.inputs[4].default_value = self.data.normal_strength
 
@@ -784,8 +822,29 @@ class SegmentAddon:
             offset -= offset_step
         return offset
 
+    def create_segment(self, prototype):
+        obj = Utils.copy_object(prototype)
+        obj.location = (0, 0, 0)
+        bpy.context.collection.objects.link(obj)
+
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+
+        self.assign_segment_materials()
+        return obj
+
     def create_digit(self, digit_prototype, offset, display, digit):
+        """
+        Creates a segment digit.
+
+        Assumes:
+        No materials / slots
+        "Segment" vertex color map defining segments
+        "segments" face map for active areas
+        """
         obj = Utils.copy_object(digit_prototype)
+        obj.location = (0, 0, 0)
         bpy.context.collection.objects.link(obj)
 
         bpy.ops.object.select_all(action='DESELECT')
@@ -812,7 +871,66 @@ class SegmentAddon:
         self.create_vertex_color_map(mesh, "Display", display)
 
         # Move by offset
+        print("Moving by offset: " + str(offset))
         obj.location.x += offset
+
+    def create_aux(self, prototype, offset):
+        """
+        Creates an auxilliary segment like a dot or a colon.
+        The segment will be always on.
+
+        Assumes:
+        No materials / slots
+        No vertex colors
+        "segments" face map for active areas
+        """
+        obj = self.create_segment(prototype)
+
+        # Paint the segment mask override signal
+        # Makes SegmentBase always output "1" as a mask value
+        self.create_vertex_color_map_rgb(obj.data, "Segment", 1, 0, 1)
+
+        # Move by offset
+        obj.location.x += offset
+
+    def create_dot(self, offset):
+        if self.data.show_dot:
+            self.create_aux(self.resource.objects[2], offset)
+        else:
+            self.create_aux(self.resource.objects[1], offset) #Empty separator
+
+    def create_colon(self, offset):
+        if self.data.show_colons:
+            self.create_aux(self.resource.objects[3], offset)
+        else:
+            self.create_aux(self.resource.objects[1], offset) #Empty separator
+
+    def assign_segment_materials(self):
+        """
+        Assigns the segment foreground and background materials to the 1st and 2nd slots.
+        The segment foreground is assigned to faces based on the "segments" face map.
+        The segment background everywhere else.
+
+        Uses operators on context.object
+        """
+        bpy.ops.object.mode_set(mode='EDIT')
+
+        # Select segments face map
+        bpy.ops.mesh.select_all(action = 'DESELECT')
+        bpy.context.object.face_maps.active_index = bpy.context.object.face_maps['segments'].index
+        bpy.ops.object.face_map_select()
+
+        # Add materials
+        bpy.context.object.data.materials.append(self.resource.materials[1])
+        bpy.context.object.data.materials.append(self.resource.materials[0])
+        bpy.context.object.active_material_index = 1
+        bpy.ops.object.material_slot_assign()
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    @staticmethod
+    def color_property_to_rgba_tuple(prop):
+        return (prop.r, prop.g, prop.b, 1.0)
 
     @classmethod
     def lcd_style_calculate_x_ramp(cls, bW, sbW) -> tuple:
@@ -843,18 +961,29 @@ class SegmentAddon:
         return (p1, p2)
 
     @classmethod
-    def vertex_paint_all(cls, mesh, color_map, value):
+    def vertex_paint_all_rgb(cls, mesh, color_map, r, g, b):
         i = 0
         for poly in mesh.polygons:
            for idx in poly.loop_indices:
-               color_map.data[i].color = [value] * 3 + [1]
+               color_map.data[i].color = [r, g, b, 1]
                i += 1
 
     @classmethod
-    def create_vertex_color_map(cls, mesh, name, value):
+    def vertex_paint_all(cls, mesh, color_map, value):
+        cls.vertex_paint_all_rgb(mesh, color_map, value, value, value)
+
+    @classmethod
+    def create_vertex_color_map_rgb(cls, mesh, name, r, g, b):
         mesh.vertex_colors.new(name=name)
         color_map = mesh.vertex_colors[name]
-        cls.vertex_paint_all(mesh, color_map, value + cls.VC_STEP_FAILSAFE)
+        cls.vertex_paint_all_rgb(mesh, color_map, r, g, b)
+
+    @classmethod
+    def create_vertex_color_map(cls, mesh, name, value, failsafe=None):
+        if failsafe is None:
+            failsafe = cls.VC_STEP_FAILSAFE
+        value = value + failsafe
+        cls.create_vertex_color_map_rgb(mesh, name, value, value, value)
 
 
 class Utils:
