@@ -224,14 +224,14 @@ class SegmentAddonData(bpy.types.PropertyGroup):
 
     # LCD style
     lcd_cell_width: bpy.props.FloatProperty(
-        name = "Cell width",
-        description = "Cell width factor",
+        name = "Pixel width",
+        description = "Pixel width factor",
         min = 0,
         default = 1
     )
     lcd_cell_height: bpy.props.FloatProperty(
-        name = "Cell height",
-        description = "Cell height factor",
+        name = "Pixel height",
+        description = "Pixel height factor",
         min = 0,
         default = 1.55
     )
@@ -241,9 +241,25 @@ class SegmentAddonData(bpy.types.PropertyGroup):
     )
     lcd_unit_strength: bpy.props.FloatProperty(
         name = "Unlit strength",
-        description = "How bright unlit lcd cells should appear",
+        description = "How bright unlit lcd pixels should appear",
         default = 0.010
     )
+    lcd_cell_border_x_width: bpy.props.FloatProperty(
+        name = "Pixel x gap",
+        description = "Gap between pixels on the x axis",
+        default = 0.1
+    )
+    lcd_cell_border_y_width: bpy.props.FloatProperty(
+        name = "Pixel y gap",
+        description = "Gap between pixels on the y axis",
+        default = 0.1
+    )
+    lcd_cell_subpixel_border_width: bpy.props.FloatProperty(
+        name = "Subpixel gap",
+        description = "Gap between individual r,g,b subpixels",
+        default = 0.02
+    )
+
 
 
     # Advanced
@@ -425,8 +441,13 @@ class DisplayStylePanel(SegmentPanel, bpy.types.Panel):
             col = layout.column(align=True)
             col.prop(data, "lcd_cell_width")
             col.prop(data, "lcd_cell_height")
+            col.separator()
             col.prop(data, "lcd_scale")
             col.prop(data, "lcd_unit_strength")
+            col.separator()
+            col.prop(data, "lcd_cell_border_x_width")
+            col.prop(data, "lcd_cell_border_y_width")
+            col.prop(data, "lcd_cell_subpixel_border_width")
 
 class AdvancedPanel(SegmentPanel, bpy.types.Panel):
     bl_label = "Advanced"
@@ -602,6 +623,18 @@ class SegmentAddon:
             shader_node_group.inputs[6].default_value = self.data.lcd_cell_height
             shader_node_group.inputs[7].default_value = self.data.lcd_scale
             shader_node_group.inputs[8].default_value = self.data.lcd_unit_strength
+
+            # Process and set the rgb cell border
+            cell_x_ramp = shader_node_group.node_tree.nodes['segment_lcd_shader'].node_tree.nodes['cell_x_ramp']
+            cell_y_ramp = shader_node_group.node_tree.nodes['segment_lcd_shader'].node_tree.nodes['cell_y_ramp']
+            x_points = SegmentAddon.lcd_style_calculate_x_ramp(self.data.lcd_cell_border_x_width, self.data.lcd_cell_subpixel_border_width)
+            y_points = SegmentAddon.lcd_style_calculate_y_ramp(self.data.lcd_cell_border_y_width)
+            print(x_points)
+            print(y_points)
+            for i, p in enumerate(x_points):
+                cell_x_ramp.color_ramp.elements[i+1].position = p
+            for i, p in enumerate(y_points):
+                cell_y_ramp.color_ramp.elements[i+1].position = p
 
         # Set common settings
         shader_node_group.inputs[1].default_value = (self.data.digit_foreground.r, self.data.digit_foreground.g, self.data.digit_foreground.b, 1.0)
@@ -780,6 +813,34 @@ class SegmentAddon:
 
         # Move by offset
         obj.location.x += offset
+
+    @classmethod
+    def lcd_style_calculate_x_ramp(cls, bW, sbW) -> tuple:
+        bWH = bW/2
+        sbWH = sbW/2
+
+        rgbW = (1 - bW) - sbW*2
+
+        p1 = bWH
+        p6 = 1 - bWH
+
+        rgb1 = bWH + sbWH + ((1/3)*rgbW)
+        p2 = rgb1 - sbWH
+        p3 = rgb1 + sbWH
+
+        rgb2 = bWH + sbW + sbWH + ((2/3)*rgbW)
+        p4 = rgb2 - sbWH
+        p5 = rgb2 + sbWH
+
+        print(f"bw: {bW} bWH: {bWH} sbW: {sbW} rgbW: {rgbW} rgb1: {rgb1} rgb2: {rgb2} p[]: {p1} {p2} {p3} {p4} {p5} {p6}")
+        return (p1, p2, p3, p4, p5, p6)
+
+    @classmethod
+    def lcd_style_calculate_y_ramp(cls, bW) -> tuple:
+        bWH = bW/2
+        p1 = bWH
+        p2 = 1 - bWH
+        return (p1, p2)
 
     @classmethod
     def vertex_paint_all(cls, mesh, color_map, value):
