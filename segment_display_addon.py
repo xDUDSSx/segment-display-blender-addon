@@ -213,13 +213,36 @@ class SegmentAddonData(bpy.types.PropertyGroup):
 
     # Classic style
     background_noise_strength: bpy.props.FloatProperty(
-        name = "Background noise strength",
+        name = "BG noise strength",
         min = 0,
         default = 1
     )
     background_noise_scale: bpy.props.FloatProperty(
-        name = "Background noise scale",
+        name = "BG noise scale",
         default = 2
+    )
+
+    # LCD style
+    lcd_cell_width: bpy.props.FloatProperty(
+        name = "Cell width",
+        description = "Cell width factor",
+        min = 0,
+        default = 1
+    )
+    lcd_cell_height: bpy.props.FloatProperty(
+        name = "Cell height",
+        description = "Cell height factor",
+        min = 0,
+        default = 1.55
+    )
+    lcd_scale: bpy.props.FloatProperty(
+        name = "Scale",
+        default = 2
+    )
+    lcd_unit_strength: bpy.props.FloatProperty(
+        name = "Unlit strength",
+        description = "How bright unlit lcd cells should appear",
+        default = 0.010
     )
 
 
@@ -378,9 +401,32 @@ class DisplayAppearancePanel(SegmentPanel, bpy.types.Panel):
         col.prop(data, "normal_strength")
         col.prop(data, "skew")
 
+class DisplayStylePanel(SegmentPanel, bpy.types.Panel):
+    bl_label = "Display style"
+    bl_idname = "SEGMENT_PT_display_style"
+    bl_parent_id = "SEGMENT_PT_display_appearance"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        data = scene.segment_addon_data
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
         layout.label(text="Display style")
         layout.template_icon_view(data, "style", show_labels=True)
 
+        if data.style == 'classic':
+            col = layout.column(align=True)
+            col.prop(data, "background_noise_strength")
+            col.prop(data, "background_noise_scale")
+        elif data.style == 'lcd':
+            col = layout.column(align=True)
+            col.prop(data, "lcd_cell_width")
+            col.prop(data, "lcd_cell_height")
+            col.prop(data, "lcd_scale")
+            col.prop(data, "lcd_unit_strength")
 
 class AdvancedPanel(SegmentPanel, bpy.types.Panel):
     bl_label = "Advanced"
@@ -441,7 +487,7 @@ class CreateDisplayOperator(bpy.types.Operator):
             data_dst.node_groups =  [
                                     '7SegmentDecimalProcessor', '7SegmentClockProcessor',
                                     '7SegmentTimerResolver',
-                                    '7SegmentClassicShader', '7SegmentPlainShader'
+                                    '7SegmentClassicShader', '7SegmentPlainShader', '7SegmentPlainLCDShader'
                                     ]
         resource = data_dst
 
@@ -549,8 +595,13 @@ class SegmentAddon:
         if self.data.style == "plain":
             pass
         elif self.data.style == "classic":
-            shader_node_group.inputs[4].default_value = self.data.background_noise_strength
-            shader_node_group.inputs[5].default_value = self.data.background_noise_scale
+            shader_node_group.inputs[5].default_value = self.data.background_noise_strength
+            shader_node_group.inputs[6].default_value = self.data.background_noise_scale
+        elif self.data.style == "lcd":
+            shader_node_group.inputs[5].default_value = self.data.lcd_cell_width
+            shader_node_group.inputs[6].default_value = self.data.lcd_cell_height
+            shader_node_group.inputs[7].default_value = self.data.lcd_scale
+            shader_node_group.inputs[8].default_value = self.data.lcd_unit_strength
 
         # Set common settings
         shader_node_group.inputs[1].default_value = (self.data.digit_foreground.r, self.data.digit_foreground.g, self.data.digit_foreground.b, 1.0)
@@ -573,6 +624,8 @@ class SegmentAddon:
             node_tree = self.resource.node_groups[4]
         elif self.data.style == "classic":
             node_tree = self.resource.node_groups[3]
+        elif self.data.style == 'lcd':
+            node_tree = self.resource.node_groups[5]
 
         node_group = mat.node_tree.nodes.new(type='ShaderNodeGroup')
         node_group.node_tree = node_tree
@@ -631,7 +684,6 @@ class SegmentAddon:
         """
         Timer is realized by running the frame value through the 7SegmentTimerResolver node.
         """
-        print("MARK MARK MARK")
         # Create frame node
         frame_node = Utils.create_frame_value_node(mat.node_tree)
         segment_base_group = mat.node_tree.nodes['segment_base']
@@ -790,7 +842,7 @@ class Utils:
 # ADDON
 ################################################################################
 
-classes = [MainPanel, DisplayTypePanel, DisplayValuePanel, DisplayAppearancePanel, AdvancedPanel, GeneratePanel, SegmentAddonData, CreateDisplayOperator]
+classes = [MainPanel, DisplayTypePanel, DisplayValuePanel, DisplayAppearancePanel, DisplayStylePanel, AdvancedPanel, GeneratePanel, SegmentAddonData, CreateDisplayOperator]
 
 def load_preview(pcoll, name, filepath, type):
     if not name in pcoll.keys():
@@ -809,6 +861,7 @@ def generate_style_previews():
     to_load = [
         ["plain", "Plain", "angery.png"],
         ["classic", "Classic", "hmm.png"],
+        ["lcd", "LCD", "hmmw.png"],
     ]
 
     for i, style in enumerate(to_load):
