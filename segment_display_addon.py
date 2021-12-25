@@ -233,7 +233,7 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         name = "Pixel height",
         description = "Pixel height factor",
         min = 0,
-        default = 1.55
+        default = 1
     )
     lcd_scale: bpy.props.FloatProperty(
         name = "Scale",
@@ -427,11 +427,11 @@ class DisplayStylePanel(SegmentPanel, bpy.types.Panel):
         scene = context.scene
         data = scene.segment_addon_data
 
+        layout.prop(data, "style", text="", icon="BLANK1")
+        layout.template_icon_view(data, "style", show_labels=True)
+
         layout.use_property_split = True
         layout.use_property_decorate = False
-
-        layout.label(text="Display style")
-        layout.template_icon_view(data, "style", show_labels=True)
 
         if data.style == 'classic':
             col = layout.column(align=True)
@@ -744,9 +744,9 @@ class SegmentAddon:
 
     def setup_clock_time_display_value(self, mat):
         hours = self.data.hours
-        minutes = self.data.hours
-        seconds = self.data.hours
-        milliseconds = self.data.hours
+        minutes = self.data.minutes;
+        seconds = self.data.seconds
+        milliseconds = self.data.milliseconds
         number = hours * 3600 + minutes * 60 + seconds + (milliseconds/1000)
         self.setup_numeric_number_display_value(mat, number)
 
@@ -922,7 +922,7 @@ def generate_style_previews():
     to_load = [
         ["plain", "Plain", "angery.png"],
         ["classic", "Classic", "hmm.png"],
-        ["lcd", "LCD", "hmmw.png"],
+        ["lcd", "LCD", "lcd.png"],
     ]
 
     for i, style in enumerate(to_load):
@@ -962,8 +962,11 @@ def register():
     SegmentAddon.previews[SegmentAddon.style_previews] = bpy.utils.previews.new()
     style_previews = generate_style_previews()
     SegmentAddonData.style = bpy.props.EnumProperty(
+        name="Display style",
+        description="Sets in what style the segment display mask is processed to form the final display",
         items=style_previews
     )
+
 
 
 def unregister():
