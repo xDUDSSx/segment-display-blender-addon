@@ -212,9 +212,10 @@ class SegmentAddonData(bpy.types.PropertyGroup):
     #style: bpy.props.EnumProperty - Set during register()
 
     # Classic style
-    background_noise_enabled: bpy.props.BoolProperty(
-        name = "Background noise",
-        default = True
+    background_noise_strength: bpy.props.FloatProperty(
+        name = "Background noise strength",
+        min = 0,
+        default = 1
     )
     background_noise_scale: bpy.props.FloatProperty(
         name = "Background noise scale",
@@ -440,7 +441,7 @@ class CreateDisplayOperator(bpy.types.Operator):
             data_dst.node_groups =  [
                                     '7SegmentDecimalProcessor', '7SegmentClockProcessor',
                                     '7SegmentTimerResolver',
-                                    '7SegmentClassicShader'
+                                    '7SegmentClassicShader', '7SegmentPlainShader'
                                     ]
         resource = data_dst
 
@@ -548,7 +549,7 @@ class SegmentAddon:
         if self.data.style == "plain":
             pass
         elif self.data.style == "classic":
-            shader_node_group.inputs[4].default_value = self.data.background_noise_enabled
+            shader_node_group.inputs[4].default_value = self.data.background_noise_strength
             shader_node_group.inputs[5].default_value = self.data.background_noise_scale
 
         # Set common settings
@@ -569,7 +570,7 @@ class SegmentAddon:
         node_tree = None
 
         if self.data.style == "plain":
-            node_tree = None
+            node_tree = self.resource.node_groups[4]
         elif self.data.style == "classic":
             node_tree = self.resource.node_groups[3]
 
