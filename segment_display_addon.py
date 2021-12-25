@@ -182,7 +182,7 @@ class SegmentAddonData(bpy.types.PropertyGroup):
     digit_foreground: bpy.props.FloatVectorProperty(
         name="Digit foreground",
         subtype='COLOR',
-        default=(1.0, 1.0, 1.0),
+        default=(1.0, 0.043735, 0),
         min=0.0, max=1.0,
         description="Color of the lit digit segments"
     )
@@ -223,6 +223,8 @@ class SegmentAddonData(bpy.types.PropertyGroup):
     skew: bpy.props.FloatProperty(
         name = "Skew",
         default = 0,
+        min = -1.5, max = 1.5,
+        step = 0.05,
         description = "Skews the display"
     )
     #style: bpy.props.EnumProperty - Set during register()
@@ -492,6 +494,8 @@ class AdvancedPanel(SegmentPanel, bpy.types.Panel):
         layout.use_property_split = False
         layout.prop(data, "join_display")
 
+        layout.operator("segment_addon.reset_to_defaults")
+
 
 class GeneratePanel(SegmentPanel, bpy.types.Panel):
     bl_label = "Generate display"
@@ -547,12 +551,57 @@ class CreateDisplayOperator(bpy.types.Operator):
 
         # Generate digits
         digit_prototype = resource.objects[0]
+        generated_objects = []
 
         if data.display_type == "numeric":
-            segment_addon.create_numeric_display(digit_prototype)
+            segment_addon.create_numeric_display(digit_prototype, generated_objects)
         elif data.display_type == "clock":
-            segment_addon.create_clock_display(digit_prototype)
+            segment_addon.create_clock_display(digit_prototype, generated_objects)
 
+        # Join objects
+        print(f"SegmentDisplayAddon: Generated {len(generated_objects)} objects!")
+        bpy.ops.object.select_all(action='DESELECT')
+        for o in generated_objects:
+            o.select_set(True)
+
+        if len(generated_objects) > 0:
+            active_obj = generated_objects[0]
+            bpy.context.view_layer.objects.active = active_obj
+
+            # Joining
+            if data.join_display:
+                bpy.ops.object.join()
+                # Rename joined object
+                active_obj.name = "SegmentDisplay" + data.display_type.capitalize() + data.style.capitalize()
+
+            # Apply skew
+            print(f"Skew {data.skew}")
+            if data.skew > 0:
+                skew_value = data.skew
+                skew_value *= -1
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.transform.shear(value=skew_value, orient_axis='Z', orient_axis_ortho='X', orient_type='GLOBAL')
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+        else:
+            self.report({'WARNING'}, "SegmentDisplayAddon: No objects generated!")
+
+        return {'FINISHED'}
+
+
+class ResetToDefaultsOperator(bpy.types.Operator):
+    bl_idname = "segment_addon.reset_to_defaults"
+    bl_label = "Reset settings to defaults"
+    bl_description = "Resets all the current settings to their defaults"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        data = scene.segment_addon_data
+        print(f"SegmentAddon: Resetting settings to defaults.")
+        scene.property_unset("segment_addon_data")
+        self.report({'INFO'}, "SegmentDisplayAddon: Reset settings to defaults.")
         return {'FINISHED'}
 
 
@@ -588,34 +637,34 @@ class SegmentAddon:
             return False
         return True
 
-    def create_numeric_display(self, digit_prototype):
+    def create_numeric_display(self, digit_prototype, generated):
         offset_step = self.DIGIT_WIDTH
         offset = 0
 
-        offset = self.create_digits(digit_prototype, offset, self.data.fraction_digits/10.0, self.data.fraction_digits, offset_step)
+        offset = self.create_digits(digit_prototype, offset, self.data.fraction_digits/10.0, self.data.fraction_digits, offset_step, generated)
         if self.data.fraction_digits > 0:
-            self.create_dot(offset)
+            self.create_dot(offset, generated)
             offset -= self.DIGIT_SEPARATOR_WIDTH
-        offset = self.create_digits(digit_prototype, offset, 0, self.data.digits, offset_step)
+        offset = self.create_digits(digit_prototype, offset, 0, self.data.digits, offset_step, generated)
 
-    def create_clock_display(self, digit_prototype):
+    def create_clock_display(self, digit_prototype, generated):
         offset_step = self.DIGIT_WIDTH
         offset = 0
 
         if self.data.millisecond_digits > 0:
-            offset = self.create_digits(digit_prototype, offset, 0, self.data.millisecond_digits, offset_step)
-            self.create_dot(offset)
+            offset = self.create_digits(digit_prototype, offset, 0, self.data.millisecond_digits, offset_step, generated)
+            self.create_dot(offset, generated)
             offset -= self.DIGIT_SEPARATOR_WIDTH
         if self.data.second_digits > 0:
-            offset = self.create_digits(digit_prototype, offset, 0.1, self.data.second_digits, offset_step)
-            self.create_colon(offset)
+            offset = self.create_digits(digit_prototype, offset, 0.1, self.data.second_digits, offset_step, generated)
+            self.create_colon(offset, generated)
             offset -= self.DIGIT_SEPARATOR_WIDTH
         if self.data.minute_digits > 0:
-            offset = self.create_digits(digit_prototype, offset, 0.2, self.data.minute_digits, offset_step)
-            self.create_colon(offset)
+            offset = self.create_digits(digit_prototype, offset, 0.2, self.data.minute_digits, offset_step, generated)
+            self.create_colon(offset, generated)
             offset -= self.DIGIT_SEPARATOR_WIDTH
         if self.data.hour_digits > 0:
-            offset = self.create_digits(digit_prototype, offset, 0.3, self.data.hour_digits, offset_step)
+            offset = self.create_digits(digit_prototype, offset, 0.3, self.data.hour_digits, offset_step, generated)
 
     def setup_segment_material(self):
         mat = self.resource.materials[0]
@@ -673,7 +722,7 @@ class SegmentAddon:
         digit_foreground = self.color_property_to_rgba_tuple(self.data.digit_foreground)
         digit_background = self.color_property_to_rgba_tuple(self.data.digit_background)
         if not self.data.digit_background_override:
-            digit_background = digit_foreground
+            digit_background = self.rgba_tuple_multiply(digit_foreground, 0.2)
 
         shader_node_group.inputs[1].default_value = digit_foreground
         shader_node_group.inputs[2].default_value = digit_background
@@ -816,9 +865,9 @@ class SegmentAddon:
         segment_base_group.node_tree.links.new(display_node.outputs[0], processor_node_group.inputs[1])
         segment_base_group.node_tree.links.new(processor_node_group.outputs[0], segment_core_group.inputs[0])
 
-    def create_digits(self, digit_prototype, offset, display, digit_count, offset_step):
+    def create_digits(self, digit_prototype, offset, display, digit_count, offset_step, generated):
         for i in range(0, digit_count):
-            self.create_digit(digit_prototype, offset, display, self.VC_STEP*i)
+            self.create_digit(digit_prototype, offset, display, self.VC_STEP*i, generated)
             offset -= offset_step
         return offset
 
@@ -834,7 +883,7 @@ class SegmentAddon:
         self.assign_segment_materials()
         return obj
 
-    def create_digit(self, digit_prototype, offset, display, digit):
+    def create_digit(self, digit_prototype, offset, display, digit, generated):
         """
         Creates a segment digit.
 
@@ -854,7 +903,7 @@ class SegmentAddon:
         bpy.ops.object.mode_set(mode='EDIT')
 
         # Select segments face map
-        bpy.ops.mesh.select_all(action = 'DESELECT')
+        bpy.ops.mesh.select_all(action='DESELECT')
         obj.face_maps.active_index = bpy.context.object.face_maps['segments'].index
         bpy.ops.object.face_map_select()
 
@@ -870,11 +919,12 @@ class SegmentAddon:
         self.create_vertex_color_map(mesh, "Digit", digit)
         self.create_vertex_color_map(mesh, "Display", display)
 
-        # Move by offset
-        print("Moving by offset: " + str(offset))
+        # Move by offseta
         obj.location.x += offset
 
-    def create_aux(self, prototype, offset):
+        generated.append(obj)
+
+    def create_aux(self, prototype, offset, generated):
         """
         Creates an auxilliary segment like a dot or a colon.
         The segment will be always on.
@@ -892,18 +942,19 @@ class SegmentAddon:
 
         # Move by offset
         obj.location.x += offset
+        generated.append(obj)
 
-    def create_dot(self, offset):
+    def create_dot(self, offset, generated):
         if self.data.show_dot:
-            self.create_aux(self.resource.objects[2], offset)
+            self.create_aux(self.resource.objects[2], offset, generated)
         else:
-            self.create_aux(self.resource.objects[1], offset) #Empty separator
+            self.create_aux(self.resource.objects[1], offset, generated) #Empty separator
 
-    def create_colon(self, offset):
+    def create_colon(self, offset, generated):
         if self.data.show_colons:
-            self.create_aux(self.resource.objects[3], offset)
+            self.create_aux(self.resource.objects[3], offset, generated)
         else:
-            self.create_aux(self.resource.objects[1], offset) #Empty separator
+            self.create_aux(self.resource.objects[1], offset, generated) #Empty separator
 
     def assign_segment_materials(self):
         """
@@ -927,6 +978,10 @@ class SegmentAddon:
         bpy.ops.object.material_slot_assign()
 
         bpy.ops.object.mode_set(mode='OBJECT')
+
+    @staticmethod
+    def rgba_tuple_multiply(prop, mult):
+        return (prop[0] * mult, prop[1] * mult, prop[2] * mult, 1.0)
 
     @staticmethod
     def color_property_to_rgba_tuple(prop):
@@ -1032,7 +1087,7 @@ class Utils:
 # ADDON
 ################################################################################
 
-classes = [MainPanel, DisplayTypePanel, DisplayValuePanel, DisplayAppearancePanel, DisplayStylePanel, AdvancedPanel, GeneratePanel, SegmentAddonData, CreateDisplayOperator]
+classes = [MainPanel, DisplayTypePanel, DisplayValuePanel, DisplayAppearancePanel, DisplayStylePanel, AdvancedPanel, GeneratePanel, SegmentAddonData, CreateDisplayOperator, ResetToDefaultsOperator]
 
 def load_preview(pcoll, name, filepath, type):
     if not name in pcoll.keys():
@@ -1049,8 +1104,8 @@ def generate_style_previews():
 
     items = []
     to_load = [
-        ["plain", "Plain", "angery.png"],
-        ["classic", "Classic", "hmm.png"],
+        ["plain", "Plain", "plain.png"],
+        ["classic", "Classic", "classic.png"],
         ["lcd", "LCD", "lcd.png"],
     ]
 
@@ -1093,9 +1148,8 @@ def register():
     SegmentAddonData.style = bpy.props.EnumProperty(
         name="Display style",
         description="Sets in what style the segment display mask is processed to form the final display",
-        items=style_previews
+        items=style_previews,
     )
-
 
 
 def unregister():
