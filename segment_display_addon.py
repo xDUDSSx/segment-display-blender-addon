@@ -216,7 +216,7 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         default = 0.5
     )
     hide_background: bpy.props.BoolProperty(
-        name = "Hide background",
+        name = "Remove background",
         default = False,
         description="Deletes the faces making up the background, leaving just the digit segments"
     )
@@ -227,6 +227,13 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         step = 0.05,
         description = "Skews the display"
     )
+    extrude: bpy.props.FloatProperty(
+        name = "Extrude to 3D",
+        default = 0,
+        min = -20, max = 20,
+        description = "Extrudes the display on the Z axis. This may cause issues/glitches with style shaders!"
+    )
+
     #style: bpy.props.EnumProperty - Set during register()
 
     # Classic style
@@ -287,8 +294,12 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         min = 0,
         default = 0.0001
     )
-    join_display: bpy.props.BoolProperty( #TODO
-        name = "Join display into single object",
+    join_display: bpy.props.BoolProperty(
+        name = "Join display into a single object",
+        default = True
+    )
+    fuse_display: bpy.props.BoolProperty(
+        name = "Physically merge neighbouring digit vertexes",
         default = True
     )
 
@@ -436,12 +447,13 @@ class DisplayAppearancePanel(SegmentPanel, bpy.types.Panel):
         col2.prop(data, "digit_background")
         col.prop(data, "digit_background_override")
         col.prop(data, "emission_strength")
+        col.prop(data, "normal_strength")
         col.separator()
         col.prop(data, "background")
         col.prop(data, "hide_background")
         col.separator()
-        col.prop(data, "normal_strength")
         col.prop(data, "skew")
+        col.prop(data, "extrude")
 
 class DisplayStylePanel(SegmentPanel, bpy.types.Panel):
     bl_label = "Display style"
@@ -493,6 +505,7 @@ class AdvancedPanel(SegmentPanel, bpy.types.Panel):
 
         layout.use_property_split = False
         layout.prop(data, "join_display")
+        layout.prop(data, "fuse_display")
 
         layout.operator("segment_addon.reset_to_defaults")
 
@@ -568,11 +581,23 @@ class CreateDisplayOperator(bpy.types.Operator):
             active_obj = generated_objects[0]
             bpy.context.view_layer.objects.active = active_obj
 
+
             # Joining
             if data.join_display:
                 bpy.ops.object.join()
                 # Rename joined object
                 active_obj.name = "SegmentDisplay" + data.display_type.capitalize() + data.style.capitalize()
+            else:
+                # Name individual objects
+                for i, o in enumerate(generated_objects, 1):
+                    o.name = "SegmentDisplay" + data.display_type.capitalize() + data.style.capitalize() + "_digit_" + str(i)
+
+            # Remove doubles
+            if data.fuse_display:
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                bpy.ops.mesh.remove_doubles()
+                bpy.ops.object.mode_set(mode='OBJECT')
 
             # Apply skew
             print(f"Skew {data.skew}")
@@ -583,6 +608,55 @@ class CreateDisplayOperator(bpy.types.Operator):
                 bpy.ops.mesh.select_all(action='SELECT')
                 bpy.ops.transform.shear(value=skew_value, orient_axis='Z', orient_axis_ortho='X', orient_type='GLOBAL')
                 bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Delete background
+            if data.hide_background:
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                bpy.context.object.active_material_index = 1
+                old_select_mode = SegmentAddon.get_select_mode()
+                bpy.ops.mesh.select_mode(type="FACE")
+                bpy.ops.object.material_slot_select()
+                bpy.ops.mesh.select_all(action='INVERT')
+                bpy.ops.mesh.delete(type='FACE')
+                bpy.ops.mesh.select_mode(type=old_select_mode)
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Extrude
+            if data.extrude != 0:
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                extrude_value = data.extrude
+                bpy.ops.mesh.extrude_region_move(MESH_OT_extrude_region={'use_normal_flip': False,
+                                 'use_dissolve_ortho_edges': False,
+                                 'mirror': False},
+                                 TRANSFORM_OT_translate={
+                                'value': (0, 0, extrude_value),
+                                'orient_axis_ortho': 'X',
+                                'orient_type': 'NORMAL',
+                                'constraint_axis': (False, False, True),
+                                'mirror': False,
+                                'use_proportional_edit': False,
+                                'proportional_edit_falloff': 'SMOOTH',
+                                'proportional_size': 1,
+                                'use_proportional_connected': False,
+                                'use_proportional_projected': False,
+                                'snap': False,
+                                'snap_target': 'CLOSEST',
+                                'snap_point': (0, 0, 0),
+                                'snap_align': False,
+                                'snap_normal': (0, 0, 0),
+                                'gpencil_strokes': False,
+                                'cursor_transform': False,
+                                'texture_space': False,
+                                'remove_on_cancel': False,
+                                'view2d_edge_pan': False,
+                                'release_confirm': False,
+                                'use_accurate': False,
+                                'use_automerge_and_split': False,
+                                })
+                bpy.ops.object.mode_set(mode='OBJECT')
+
 
         else:
             self.report({'WARNING'}, "SegmentDisplayAddon: No objects generated!")
@@ -978,6 +1052,18 @@ class SegmentAddon:
         bpy.ops.object.material_slot_assign()
 
         bpy.ops.object.mode_set(mode='OBJECT')
+
+    @staticmethod
+    def get_select_mode() -> str:
+        modes = bpy.context.tool_settings.mesh_select_mode[:]
+        if (modes[0] == True):
+            return 'VERT'
+        if (modes[1] == True):
+            return 'EDGE'
+        if (modes[2] == True):
+            return 'FACE'
+        print("SegmentAddon: Failed to detect select mode!")
+        return 'VERT'
 
     @staticmethod
     def rgba_tuple_multiply(prop, mult):
