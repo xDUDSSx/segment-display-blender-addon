@@ -770,20 +770,28 @@ class SegmentAddon:
         offset_step = self.DIGIT_WIDTH
         offset = 0
 
-        if self.data.millisecond_digits > 0:
-            offset = self.create_digits(digit_prototype, offset, 0, self.data.millisecond_digits, offset_step, generated)
-            self.create_dot(offset, generated)
-            offset -= self.DIGIT_SEPARATOR_WIDTH
-        if self.data.second_digits > 0:
-            offset = self.create_digits(digit_prototype, offset, 0.1, self.data.second_digits, offset_step, generated)
-            self.create_colon(offset, generated)
-            offset -= self.DIGIT_SEPARATOR_WIDTH
-        if self.data.minute_digits > 0:
-            offset = self.create_digits(digit_prototype, offset, 0.2, self.data.minute_digits, offset_step, generated)
-            self.create_colon(offset, generated)
-            offset -= self.DIGIT_SEPARATOR_WIDTH
-        if self.data.hour_digits > 0:
-            offset = self.create_digits(digit_prototype, offset, 0.3, self.data.hour_digits, offset_step, generated)
+        h = self.data.hour_digits
+        m = self.data.minute_digits
+        s = self.data.second_digits
+        ms = self.data.millisecond_digits
+
+        if ms > 0:
+            offset = self.create_digits(digit_prototype, offset, 0, ms, offset_step, generated)
+            if s > 0 or m > 0 or h > 0:
+                self.create_dot(offset, generated)
+                offset -= self.DIGIT_SEPARATOR_WIDTH
+        if s > 0:
+            offset = self.create_digits(digit_prototype, offset, 0.1, s, offset_step, generated)
+            if m > 0 or h > 0:
+                self.create_colon(offset, generated)
+                offset -= self.DIGIT_SEPARATOR_WIDTH
+        if m > 0:
+            offset = self.create_digits(digit_prototype, offset, 0.2, m, offset_step, generated)
+            if h > 0:
+                self.create_colon(offset, generated)
+                offset -= self.DIGIT_SEPARATOR_WIDTH
+        if h > 0:
+            offset = self.create_digits(digit_prototype, offset, 0.3, h, offset_step, generated)
 
     def setup_segment_material(self):
         mat = self.resource.materials[0]
