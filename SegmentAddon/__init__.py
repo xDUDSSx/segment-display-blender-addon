@@ -294,6 +294,10 @@ class SegmentAddonData(bpy.types.PropertyGroup):
         min = 0,
         default = 0.0001
     )
+    object_scale: bpy.props.FloatProperty(
+        name = "Object scale",
+        default = 0.1
+    )
     join_display: bpy.props.BoolProperty(
         name = "Join display into a single object",
         default = True
@@ -501,6 +505,7 @@ class AdvancedPanel(SegmentPanel, bpy.types.Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         col = layout.column(align=True)
+        col.prop(data, "object_scale")
         col.prop(data, "float_correction")
 
         layout.use_property_split = False
@@ -581,7 +586,6 @@ class CreateDisplayOperator(bpy.types.Operator):
             active_obj = generated_objects[0]
             bpy.context.view_layer.objects.active = active_obj
 
-
             # Joining
             if data.join_display:
                 bpy.ops.object.join()
@@ -656,6 +660,47 @@ class CreateDisplayOperator(bpy.types.Operator):
                                 'use_automerge_and_split': False,
                                 })
                 bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Move to origin and scale
+            cursor = bpy.context.scene.cursor.location
+            # if not data.join_display:
+            #     # We have to move and scale all objects
+            #     for i, o in enumerate(generated_objects, 1):
+            #         o.name = "SegmentDisplay" + data.display_type.capitalize() + data.style.capitalize() + "_digit_" + str(i)
+            #     active_obj.name = "SegmentDisplay" + data.display_type.capitalize() + data.style.capitalize()
+            # else:
+            #     # Just scale the active object
+
+            bpy.ops.transform.translate(
+                value=(cursor[0], cursor[1], cursor[2]),
+                orient_axis_ortho='X',
+                orient_type='GLOBAL',
+                orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                orient_matrix_type='GLOBAL',
+                mirror=False,
+                use_proportional_edit=False,
+                proportional_edit_falloff='SMOOTH',
+                proportional_size=1,
+                use_proportional_connected=False,
+                use_proportional_projected=False,
+            )
+
+            old_pivot_point = bpy.context.scene.tool_settings.transform_pivot_point
+            bpy.context.scene.tool_settings.transform_pivot_point = 'ACTIVE_ELEMENT'
+            scale_factor = data.object_scale
+            bpy.ops.transform.resize(
+                value=(scale_factor, scale_factor, scale_factor),
+                orient_type='GLOBAL',
+                orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                orient_matrix_type='GLOBAL',
+                mirror=False,
+                use_proportional_edit=False,
+                proportional_edit_falloff='SMOOTH',
+                proportional_size=1,
+                use_proportional_connected=False,
+                use_proportional_projected=False,
+            )
+            bpy.context.scene.tool_settings.transform_pivot_point = old_pivot_point
 
 
         else:
@@ -796,7 +841,10 @@ class SegmentAddon:
         digit_foreground = self.color_property_to_rgba_tuple(self.data.digit_foreground)
         digit_background = self.color_property_to_rgba_tuple(self.data.digit_background)
         if not self.data.digit_background_override:
-            digit_background = self.rgba_tuple_multiply(digit_foreground, 0.2)
+            if (self.data.style == 'lcd'):
+                digit_background = (0., 0., 0., 1.)
+            else:
+                digit_background = self.rgba_tuple_multiply(digit_foreground, 0.2)
 
         shader_node_group.inputs[1].default_value = digit_foreground
         shader_node_group.inputs[2].default_value = digit_background
@@ -1218,8 +1266,11 @@ def register():
 
     SegmentAddon.addon_directory_path_full = os.path.dirname(os.path.realpath(__file__))
     if ".blend" in SegmentAddon.addon_directory_path_full:
+        # Run as a script
+        # NOTE: This does not work unless the blend file is saved.
         SegmentAddon.addon_directory_path = os.path.split(SegmentAddon.addon_directory_path_full)[0]
     else:
+        # Addon installed
         SegmentAddon.addon_directory_path = SegmentAddon.addon_directory_path_full
 
     SegmentAddon.addon_resources_dir = os.path.join(SegmentAddon.addon_directory_path, 'resources')
