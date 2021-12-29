@@ -4,6 +4,7 @@ import copy
 import os
 import mathutils
 from bpy.types import Scene, WindowManager, Image, ShaderNodeTree, ShaderNodeGroup
+import bpy.utils.previews
 
 bl_info = {
 	"name": "Segment Display Generator",
