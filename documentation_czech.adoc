@@ -1,0 +1,312 @@
+:show-link-uri:
+= Blender Add-on pro generování 7 segmentových displejů
+:author: Dan Rakušan
+:email: rakusdan@fit.cvut.cz
+:doctype: book
+:sectnums:
+:sectanchors:
+:sectnumlevels: 4
+:toc: left
+:title-page:
+:toc-title: Obsah
+:toclevels: 5
+:outlinelevels: 6:0
+:icons: font
+:experimental:
+:description: Dokumentace
+:keywords: AsciiDoc
+:imagesdir: ./images
+
+== Úvod
+[.lead]
+Tento dokument je dokumentace semestrální práce předmětu BI-PGA na ČVUT FIT. +
+Předmětem práce je tvorba addonu/pluginu pro 3D program Blender. Téma jsem si vymyslel vlastní, a to addon, který umožnuje generování 7 segmentových displejů dle široké škály parametrů. Displeje lze také animovat a lze je použít pro zobrazení čísel / času např. při modelování nábytku, spotřebičů, hodinek apod. nebo opravdu kdekoli kde se segmentový displej hodí.
+
+[NOTE]
+O výběru tématu jsem nikoho neinformoval. Psal jsem email panu Chludilovi s návrhem ještě jiného tématu ale nikdy jsem nedostal odpověď.
+
+.Příklady generovaných displejů
+image::examples.png[width=100%]
+
+== Uživatelská příručka
+
+=== Instalace
+[NOTE]
+Addon je vytvořen pro Blender verze 3.0.0+ 
+
+Zazipovaný archiv `SegmentAddon.zip` standardně nainstalujte a zapněte skrz Blender preference.
+
+Hlavní panel addonu se nachází v pravém sidebaru (N-panelu) 3D View editoru pod záložkou "Segment display".
+
+=== Použití
+
+Addon funguje velice jednoduše a dokáže jednorázově generovat nový displej dle daného nastavení.
+
+V panelu addonu stačí nastavení upravit a následně dole v panelu "Generate display" stisknout tlačítko s textem "Create display".
+
+Nový segmentový displej se vygeneruje na současné pozici kurzoru. V současné chvíli nelze displej dále addonem upravovat, displej se musí vygenerovat znovu v případě změny nastavení. Displej lze samozřejmě upravovat a nadále s ním pracovat přímo v 3D View nebo Shader editoru.
+
+=== Stručný popis funkcí
+
+==== Typ displeje
+.Hlavní panel addonu
+image::overview.png[float=right]
+
+Addon umí generovat 2 typy segmentových displejů. *Numerické* zobrazující decimální číslo a *časový*, zobrazující hodiny, minuty, sekundy a milisekundy. U každého typu lze nastavit počet cifer.
+
+===== Zobrazovaná hodnota
+Numerický displej má módy zobrazení:
+
+- Číslo
+-- Zobrazí jedno statické číslo
+- Snímek (Animované)
+-- Zobrazí číslo současného snímku animace. Číslo snímku lze dále např. dělit nějakým čísem nebo posunout.
+- Časovač (Animované)
+-- Displej se postupně změní z jednoho čísla na druhé v nějakém časovém intervalu. Může počítat nahoru i dolu.
+
+Časový displej je podobný, ale pracuje v base-60:
+
+- Sekundy
+-- Zobrazí daný počet sekund
+- Čas
+-- Zobrazí daný čas
+- Snímek (Animované)
+-- Zobrazí číslo snímku převedeného na sekundy. Opět lze dělit a posouvat. Dělením počtem snímku za sekundu docílíme realtime zobrazení času.
+- Časovač (Animované)
+-- Počítá z nějakého času do času druhého. Nahoru i dolů. Tedy displej funguje jako stopky nebo klasický časovač.
+
+==== Vzhled
+Displeji lze nastavit barvu svítícího a nesvítícího segmentu, popřípadě zhasnutá barva může být nastavena automaticky addonem. +
+Lze nastavit i sílu emission materiálu.
+Některým stylům lze i nastavit sílu případné normálové mapy. +
+Displej se také skládá z pozadí neboli oblasti mimo segmenty samotné.
+Pozadí se může také negenerovat a výsledný displej se bude skládat + pouze ze segmentů.
+Displej ještě může být rozšířen do 3. dimenze nebo/a nastavit míru šikmosti.
+
+===== Styl displeje
+Poslední vzhledové nastavení je styl displeje. To je shader, který je aplikován na oblasti segmentů.
+
+- Prostý
+-- Segmenty jsou pouze zabarveny do nějaké barvy bez dalšího stínování.
+- Klasický
+-- Na segmenty je aplikovaná jasová textura, která zjasní prostředky segmentů a naopak ztemní jejich kraje
+- LCD
+-- Na segmenty je aplikován LCD shader, který jejich barvy přetvoří na pole různě zabarvených moderních LCD pixelů / subpixelů.
+
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+{empty} +
+
+[.float-group]
+--
+image:plain.png[width=32%,pdfwidth=32vw]
+image:classic.png[width=32%,pdfwidth=32vw]
+image:lcd.png[width=32%,pdfwidth=32vw]
+--
+
+== Technická dokumentace
+V rámci technické dokumentace projdu klíčové části addonu a poskytnu vysvětlení jejich funkce. Do detailů ve smyslu komentáře ke každé lince/sekci kódu opravdu nezajdu.
+
+=== Původ nápadu
+Na potřebu segmentového displeje v Blenderu jsem narazil při modelování obvodu pro časovanou nálož, kterou jsem modeloval v rámci jednoho hobby projektu. Blender zdánlivě žádný jednoduchý způsob, jak docílit animovaného segmentového displeje nemá, a tedy cílevědomý modelář začne hledat na webu. Tam je hned několik návodů, jak takového displeje docílit a jeden z prvních google výsledků je hned na již hotový 7 segmentový shader na blender marketu, který je velice pěkně udělaný ale bohužel se jedná o placený obsah. Zbývá tedy začít číst tutoriály a podobně nebo případně segmentový displej do blenderu dostat jako již hotové video z nějakého externího programu.
+
+Na jeden z těchto tutoriálu jsem narazil a jeho jednoduchý princip a public domain license mě zaujala. Specificky se jedná o https://sharkigator.wordpress.com/2016/01/15/7-segment-display-tutorial/[tento blogpost] od uživatele *sharkigator*. +
+Hlavní myšlenka addonu staví na vylepšeném node setupu právě z tohoto blogu. Původně jsem tento node setup pouze rozšířil, trochu s ním zjednodušil práci a pomocí něho vytvořil .blend soubor s mnoho manuálně vytvořenými displeji s různými počty cifer. +
+Na tento .blend soubor jsem si následně tento semestr vzpomněl a napadlo mě celý dost komplikovaný proces tvorby displeje zautomatizovat tvorbou addonu.
+
+=== Princip fungování
+Addon sestavuje displej z modelu jedné číslice s různými parametry. Tento model má skutečnou geometrii reprezentující všech 7 segmentů číslice. Ploškám těchto segmentů je přiřazen materiál, který mění barvu jednotlivých segmentů, aby tvořili potřebné číslice. Vertexy tvořící jednotlivé segmenty jsou obarveny pomocí vertex paintingu na hodnoty, které identifikují, o jaký segment se jedná. Ostatní plošky modelu mají přirazen jiný jednoduchý materiál pozadí. +
+
+Materiál segmentu vytváří masku aktivních "rozsvícených" segmentů, na kterou lze dále aplikovat různé barvy a efekty dle nastavení addonu.
+
+Mezi modely číslic jsou případně vyloženy i užší modely rozdělovačů jako je tečka nebo dvojtečka.
+
+Tento přístup tedy je tak trochu hybridní, a tedy displej není zcela tvořen pouze shadery. Shader segmentů získává informace o segmentech z vertex barev, nikoli nějaké mapy generované pomocí obrázků nebo přímo matematicky v rámci shader editoru (i když to by také šlo).
+
+O tom zdali je čistý shaderový přístup lepší či ne tu asi nebudu diskutovat i když nejspíš je odpověď kladná. Tento hybridní přistup jsem zvolil, protože se mi dříve zmíněný blogpost zalíbil a práci jsem již měl rozdělanou. Hlavní výhoda tohoto přístupu je, že s displejem můžeme fyzicky manipulovat a tvoří ho reálné vertexy, což je tedy i hlavní nevýhoda.
+
+První vertex color atribut určuje tedy k jakému segmentu daný vertex patří.
+
+.Vertex barvy segmentu
+image::segment.png[align=center, width=30%]
+
+Dále existují ještě 2 vertex color atributy. Oba jsou přiřazeny všem vertexům číslice. Jeden co určuje který řád číslice zobrazuje (také součástí blogpostu) a další, který určuje jaký typ hodnoty číslice zobrazuje. V případě numerického displeje rozlišujeme mezi celočíselnou a zlomkovou částí a v případě hodin udává zdali zobrazujeme hodiny, minuty, sekundy nebo milisekundy.
+
+.Vertex barvy pro digit a display pro různé displeje
+image::display_digit.png[width=100%]
+
+==== Základní node groupy
+===== 7SegmentCore
+Segmentové jádro je node group z původního blogu od sharkigator. Jeho výstupem je maska reprezentující, které segmenty mají svítit pro dané číslo na dané číslici. +
+Na vstupu vezme číslo, pozici číslice a informace o vertex barvách segmentu.
+Nejdříve vydělením čísla řádem číslice a zahozením zlomkové části získáme číslici od 0 do 9 na pozici, o kterou máme zájem. V dolní části pak vezmeme vertex barvy segmentů a porovnáváním hodnot získáme mapy jednotlivých segmentů, které poté můžeme sečíst dohromady abychom složili mapy pro všech 10 číslic. +
+Výsledně máme 10 výstupu z nichž jeden nese hodnotu 1 pro identifikaci číslice, kterou chceme a 10 výstupů reprezentující jednotlivé číslice. Tyto výstupy (hodnoty 0 až 1) mezi sebou všechny vynásobíme (AND operace) a výsledek je maska pro zvolenou číslici.
+
+.7SegmentCore node group
+image::segment_core.png[width=100%]
+
+===== 7SegmentBase
+Segmentové jádro je ovládáno segmentovou základnou. Tento node group získá hodnoty _segment_ a _digit_ vertex barev z _Attribute_ nodů a předá je jádru. Nejdříve však provede jistý preprocessing se zadaným číslem pomocí _display_ vertex barvy. Číslo podělí dělitelem zadaným vstupem a přidá malou hodnotu float correction, která může pomoci, když se začnou objevovat problémy s přesností floating-point čísel v shaderech.
+
+.7SegmentBase node group
+image::segment_base.png[width=100%]
+
+[NOTE]
+Možná si všimnete math _power_ nodů s exponentem 0.455. Tyto nody převádějí vertex barvu z lineární interpretace do interpretace sRGB. Když v vertex paint editoru nastavíme vertexu barvu (0.5, 0.5, 0.5), ve skutečnosti se do vertexu uloží hodnota 0.216, kterou pak __Attribute_ nody vrací. Umocnění na 0.455 zhruba zpátky sRGB aproximuje. Toto nejde nijak změnit a je zdrojem velké frustrace a v Blender dev trackeru už dlouhou dobu visí ticket, který by toto chování měl změnit. Konverzi lze udělat přesněji ale toto stačí. V kódu addonu jsou metody, které tuto konverzi provádí přesně a lze je "přepsat" do nodů, ale zatím není potřeba.
+
+Poté je číslo společně s _display_ barvou předáno do takzvané "processor" node groupy, kterou addon dynamicky volí podle typu displeje. Pro numerické displeje je `7SegmentDecimalProcessor` a pro hodiny `7SegmentClockProcessor`. Tyto node groupy provedou potřebné úpravy čísla dle typu displeje.
+
+====== 7SegmentDecimalProcessor
+
+Tento procesor jednoduše číslo podělí řádem zlomkového displeje. Pokud chceme zobrazovat číslo s přesností na tisíciny, vertex color _display_ bude nastaveno na 0.3, z 0.3 uděláme 10^(0.3*10) = 10^3 a a číslo vynásobíme 1000. Segmentové jádro potom zobrazí první 3 číslice tohoto velkého čísla, což je přesně zlomková část čísla původního
+
+====== 7SegmentClockProcessor
+
+Tento procesor číslo chápe jako počet sekund k zobrazení a barvu _display_ jako indikátor, zdali chceme hodiny=0.3, minuty=0.2, sekundy=0.1 nebo milisekundy=0.0.
+
+Počet sekund převedeme na počet hodin, minut, sekund nebo milisekund a podle hodnoty _display_ pomocí multiply a add math nodů vybereme tu variantu, kterou chceme.
+
+
+.7SegmentClockProcessor node group
+image::clock_processor.png[width=100%]
+
+==== Materiály
+Displeje mají 2 materiály. Materiál segmentů a materiál pozadí (pouze barva).
+
+V materiálu segmentů se odehrává všechno důležité. Je přiřazen ploškám tvořícím jednotlivé segmenty.
+Skládá se z 2 částí, segmentové základy a segmentového shaderu.
+Segmentová základna vytváří masku pro dané číslo, tuto masku následně vezme segment shader a pokusí se z ní udělat něco pěkného. Výstupem segmentového shaderu jsou vstupy pro klasický Principled BSDF shader, který je výstup materiálu.
+
+image::segment_material.png[width=100%]
+
+===== Segmentová základna
+Addon zprostředkovává číselný vstup a upravuje ho podle požadované zobrazované hodnoty.
+To může být pouze value node s číslem, animovaný value node dle #frame driveru nebo node group `7SegmentTimerResolver`, který číslo současného snímku přetvoří dle nastavení časovače.
+
+====== 7SegmentTimerResolver
+Timer resolver má 5 vstupů.
+Nějakou hodnotu, která dává časovač do pohybu, tu nastavuje addon na driver #frame (číslo současného snímku animace). Dále máme inputy From a To. To je počáteční a konečná hodnota mezi, kterou časovač interpoluje.
+Interpolace je provedena v nějakém časovém intervalu, a to mezi Start a Stop, což jsou čísla snímků začátku a konce interpolace.
+
+Node setup vypadá složitě ale je to jen základní matematika. Ze současného snímku zjistíme, zdali je mezi snímky Start a Stop. Pokud ne tak nastavíme výstup jako buď hodnotu From nebo To. Pokud v intervalu interpolace jsme, zjistíme, jak daleko je současný snímek od začátku interpolace. Tu informaci získáme jako faktor od 0 do 1, kterým můžeme vynásobit rozdíl mezi From a To a přičíst k From abychom získali aktualní hodnotu pro daný snímek.
+
+Tento proces může fungovat i opačně když From je větší než To, stačí si pouze ohlídat záporné hodnoty, a nakonec od From odečíst místo přičíst.
+
+===== Segmentový shader
+Addon také vybírá vhodný segmentový shader dle zvoleného stylu displeje. Tento shader také addon upravuje dle nastavení, většinou se jedná jen o menší úpravy parametrů v případech, kde se hodí logika pythonu.
+
+
+image::timer_resolver.png[width=100%]
+
+====== 7SegmentPlainShader
+Plain shader pouze zabarvuje masku dle nastavení a výstup jsou tedy pouze základní barvy.
+
+====== 7SegmentClassicShader
+Classic shader používá texturu mapy jasnosti a texturu normal mapy.
+Podle mapy jasnosti zjasňuje či ztemňuje části segmentů, specificky zatemní kraje a zjasní prostředky, aby docílil realističtějšího vzhledu. Normálová mapa pouze dodává segmentům tvar.
+
+image::classic_shader.png[width=100%]
+
+====== 7SegmentPlainLCDShader
+PlainLCD shader používá plain shader v kombinaci s node groupou LCD efektu napodobují vzhled LCD panelů moderních monitorů.
+LCD efektu je docíleno generací mnoha opakujících se pixelových buňek, každá obsahující subpixel pouze červené/zelené/modré barvy. Obrazový vstup je pak vynásoben tímto polem čehož docílíme různé míry "rozsvícení" jednotlivých subpixelů. Pokud se na výsledný materiál podíváme z jisté dálky, barvy splynou a vytvoří cílovou barvu, stejně jako monitory. Je pěkné že tento efekt funguje dobře i v Blenderu.
+
+Addon je schopen LCD node groupu upravovat a změnit proporce samotného LCD pixelu.
+
+.Plain LCD shader
+image::plain_lcd_shader.png[width=100%]
+
+.LCD node group
+image::lcd_shader.png[width=100%]
+
+=== Addon
+Teď trochu o addonu samotném. Addon funguje pouze jako zprostředkovatel / sestavovač všech komponentů výše zmíněných. Jak už jsem zmínil, nehodlám zacházet do detailu kódu samotného a pouze projdu obecnou strukturu a životo-cyklus kódu.
+
+==== Obecné
+Addon si do scény ukládá jednu velkou instanci datové _PropertyGroup_ s názvem _SegmentAddonData_. Tato skupina vlastností obsahuje kompletní nastavení pro jeden displej. Toto nastavení je prezentováno v jednom hlavním panelu uživateli s možností spuštění operátoru _CreateDisplayOperator_, který na základě současného stavu nastavení vygeneruje jeden displej na aktuální pozici kurzoru.
+
+
+==== UI
+UI je relatvině jednoduché, vše se nachází v panelu _MainPanel_, který zobrazuje všechny vlastnosti _SegmentAddonData_ aktivní scény. Hlavní panel je rozdělen na mnoho subpanelů dle potřeb seskupování možností.
+
+Za zmínku možná stojí zobrazení enumu displejových stylů pomocí `template_icon_view`. Styly jsou zobrazeny pomocí velkých ikon načtených pomocí `bpy.utils.previews` ze složky /resources/styles. O toto načtení se stará metoda `generate_style_previews()`.
+
+==== Operátor generace
+Tento operátor se spustí po stisknutí tlačítka "Create display" v UI.
+
+===== Načtení zdrojů
+Nejdříve se načtou potřebné objekty, materiály a node groupy z přibaleného `segment.blend` souboru v adresáři addonu. Načtení těchto data bloků je provedeno pomocí `bpy.data.libraries.load`.
+
+image::load_resources.png[width=100%]
+
+===== Materiály
+Načtený vzor segmentového materiálu je dle nastavení doupraven. +
+Tedy je vybrán správný procesor čísla v node groupě segmentové základny.
+Segmentové základně je nastaveno náležité vstupní číslo, v případě časovače je toto číslo nejdříve prohnáno náležitě nastaveným resolverem. +
+Segmentová základna je následně napojena na vybraný stylový shader. Tento shader je také podle jeho typu upraven.
+
+image::setup_material.png[width=100%]
+
+===== Generace displeje
+Dle typu displeje se začnou generovat číslice displeje. 
+Ze `segment.blend` souboru je načten objekt číslice s předpřipravenými _segment_ vertex barvami. Tento objekt je pro každou číslici zduplikován a přidán do scény. +
+Tento objekt má také uloženou face mapu plošek, které tvoří segmenty. Těmto ploškám je přiřazen segmentový materiál a ostatním je přiřazený materiál pozadí. +
+
+Číslice se generují zprava doleva. Vždy po vytvoření číslice se další číslice posune o šířku předchozí generované číslice. Mezi číslice se případně generuje objekt rozdělovače, kterému jsou také přiřazeny připravené materiály.
+
+.Sestavování numerického a hodinového displeje
+image::display_generation.png[width=100%]
+
+Každé číslici jsou vytvořeny a obarveny vertex color mapy pro _digit_ a _display_ dle pozice/typu generované číslice. Obarveny jsou plošně všechny vertexy číslice.
+
+.Metoda create_digit()
+image::create_digit.png[width=100%]
+
+Po dokončení generace se dle nastavení všechny objekty číslic a rozdělovačů spojí pomocí klasických operátorů do jednoho objektu, objekt je pojmenován a případně je na něm spuštěn `remove_doubles()` operátor ke spojení "sdílených" vertexů sousedních číslic/rozdělovačů. +
+Na objekt je možné také aplikovat `shear` operátor dle hodnoty _skew_ nastavení nebo operátor `extrude` po ose Z pro vytvoření 3D displeje. +
+Také lze smazat všechny vertexy, které netvoří samotné segmenty a tím se zbavit pozadí číslic.
+
+Nakonec se vygenerovaný objekt (nebo objekty) posune na aktuální pozici kurzoru a také je škálován dle nastavení _object_scale_.
+
+.Vygenerovaný displej
+image::done.png[width=100%]
+
+== Limitace
+
+Jsou tu jisté limitace, které současný návrh má. +
+Určitě by bylo dobré mít možnost displeje dynamicky upravovat, tedy aby displej reagoval na změny v UI. Tuto funkci jsem zatím vynechal, ale určitě je možná.
+
+Další limitace plynou z použití vertex barev. Max. počet cifer jednoho typu je omezen na 10. Tedy numerický displej může mít až 20 cifer. Je dost a číslo by šlo i zvětšit pokud bych použil přesnější konverzi mezi lineárním a sRGB prostorem.
+
+Víc cifer však potřeba moc není, protože jedno z největších omezení je floating-point přesnost čísel v shader editoru. V tuto chvíli se zdá, že displej je schopen ukázat čísla na zhruba 8 desetinných míst. To zhruba odpovídá tomu co jsem si o tomto tématu v rámci Blenderu četl, ale nejsem si jistý.
+
+Z použití geometrie a vertex barev, tedy tohoto "hybridního" přístupu, který nepoužívá pouze shader, plyne omezení, že vytvořená segmentová maska nemá přesně dané okraje. Respektive její okraje jsou přímo dané geometrií a přirazeným materiálem. +
+To znamená, že shadery nemají jasnou informaci o tom, kde je hranice segmentu.
+Není známá ani vzdálenost k nejbližšímu okraji tak k zatemnění krajů segmentů musím využívat texturu. Shadery, které využívají pixelizace jako např správně udělaný LCD shader nebo dot matrix shader (přeložení obrázku na různě zabarvené kolečka) nemůžou fungovat zcela správně. Např. některé pixely součásného LCD shaderu jsou "rozřízlé" napůl, tak skutečný displej nefunguje.
+
+Tento problém by nejspíš v budoucích iteracích addonu šel obejít dodáním textury, která indikuje jak daleko je daný bod segmentu od nejbližší hrany.
+Taková textura by šla i generovat dynamicky podle geometrie segmentů, i samotná geometrie segmentů by šla generovat a upravovat dynamicky.
+Addonu by šly i dodávat různé modely číslic, které samy o sobě mají nějaký styl. Tedy jiné tvary segmentů a podobně.
+
+== Závěr
+
+Obecně jsem s addonem spokojený. Dělá co má a zdá se mi lehký na použití.
+Je také lehké ho dál rozšiřovat vzhledem k tomu, že sestavování materiálů je z velké části modulární díky node groupům. +
+
+https://github.com/xDUDSSx/segment-display-blender-addon[GitHub repo link]
+
+== Zdroje
+
+https://sharkigator.wordpress.com/2016/01/15/7-segment-display-tutorial/[Sharkigator segment display blogpost]
+
+https://www.youtube.com/watch?v=fJ1WBx3kJaQ[YouTube video od Jonathan Kron - Inspirace pro LCD shader]
