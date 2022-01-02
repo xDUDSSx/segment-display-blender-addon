@@ -555,13 +555,21 @@ class CreateDisplayOperator(bpy.types.Operator):
 		# Load resources from the segment blend file
 		link = False
 		with bpy.data.libraries.load(SegmentAddon.addon_blend_path, link=link) as (data_src, data_dst):
+			# Objects that only need to be loaded once
+			objects_to_load = [SEGMENT_DIGIT, SEGMENT_EMPTY, SEGMENT_DOT, SEGMENT_COLON]
+			for o in objects_to_load:
+				if o not in bpy.data.objects:
+					print("Appending prototype object: " + str(o))
+					data_dst.objects.append(o)
+					# Avoid duplicates
+
 			#data_dst.meshes = ['segment_digit_mesh']
-			data_dst.objects = ['segment_digit', 'segment_empty', 'segment_dot', 'segment_colon']
-			data_dst.materials = ['7SegmentDisplay', '7SegmentDisplayBackground']
+			#data_dst.objects = ['segment_digit', 'segment_empty', 'segment_dot', 'segment_colon']
+			data_dst.materials = ['.7SegmentDisplay', '.7SegmentDisplayBackground']
 			data_dst.node_groups =	[
-									'7SegmentDecimalProcessor', '7SegmentClockProcessor',
-									'7SegmentTimerResolver',
-									'7SegmentClassicShader', '7SegmentPlainShader', '7SegmentPlainLCDShader'
+									'.7SegmentDecimalProcessor', '.7SegmentClockProcessor',
+									'.7SegmentTimerResolver',
+									'.7SegmentClassicShader', '.7SegmentPlainShader', '.7SegmentPlainLCDShader'
 									]
 		resource = data_dst
 
@@ -575,7 +583,7 @@ class CreateDisplayOperator(bpy.types.Operator):
 		segment_addon.setup_segment_material()
 
 		# Generate digits
-		digit_prototype = resource.objects[0]
+		digit_prototype = bpy.data.objects[SEGMENT_DIGIT]
 		generated_objects = []
 
 		if data.display_type == "numeric":
@@ -611,7 +619,6 @@ class CreateDisplayOperator(bpy.types.Operator):
 				bpy.ops.object.mode_set(mode='OBJECT')
 
 			# Apply skew
-			print(f"Skew {data.skew}")
 			if data.skew > 0:
 				skew_value = data.skew
 				skew_value *= -1
@@ -734,6 +741,11 @@ class ResetToDefaultsOperator(bpy.types.Operator):
 ################################################################################
 # CORE
 ################################################################################
+
+SEGMENT_DIGIT = 'segment_digit'
+SEGMENT_EMPTY = 'segment_empty'
+SEGMENT_DOT = 'segment_dot'
+SEGMENT_COLON = 'segment_colon'
 
 class SegmentAddon:
 	VC_STEP = 0.1
@@ -885,6 +897,9 @@ class SegmentAddon:
 		elif self.data.style == 'lcd':
 			node_tree = self.resource.node_groups[5]
 
+		# Rename to be unique
+
+
 		node_group = mat.node_tree.nodes.new(type='ShaderNodeGroup')
 		node_group.node_tree = node_tree
 		node_group.name = node_tree.name
@@ -951,7 +966,7 @@ class SegmentAddon:
 		timer_resolver_tree = self.resource.node_groups[2]
 		timer_resolver_group = mat.node_tree.nodes.new(type='ShaderNodeGroup')
 		timer_resolver_group.node_tree = timer_resolver_tree
-		timer_resolver_group.name = "7SegmentTimerResolver"
+		timer_resolver_group.name = timer_resolver_tree.name
 		Utils.move_node(timer_resolver_group, 463, 370)
 
 		# Link nodes
@@ -1084,15 +1099,15 @@ class SegmentAddon:
 
 	def create_dot(self, offset, generated):
 		if self.data.show_dot:
-			self.create_aux(self.resource.objects[2], offset, generated)
+			self.create_aux(bpy.data.objects[SEGMENT_DOT], offset, generated)
 		else:
-			self.create_aux(self.resource.objects[1], offset, generated) #Empty separator
+			self.create_aux(bpy.data.objects[SEGMENT_EMPTY], offset, generated) #Empty separator
 
 	def create_colon(self, offset, generated):
 		if self.data.show_colons:
-			self.create_aux(self.resource.objects[3], offset, generated)
+			self.create_aux(bpy.data.objects[SEGMENT_COLON], offset, generated)
 		else:
-			self.create_aux(self.resource.objects[1], offset, generated) #Empty separator
+			self.create_aux(bpy.data.objects[SEGMENT_EMPTY], offset, generated) #Empty separator
 
 	def assign_segment_materials(self):
 		"""
