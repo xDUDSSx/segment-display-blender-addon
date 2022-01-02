@@ -10,7 +10,7 @@ bl_info = {
 	"name": "Segment Display Generator",
 	"description": "Generates 7 segment displays in various formats and styles.",
 	"author": "DUDSS",
-	"version": (1, 0),
+	"version": (1, 0, 1),
 	"blender": (3, 0, 0),
 	"location": "3D View > Right sidebar > Segment display",
 	"warning": "",
