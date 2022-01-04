@@ -1,3 +1,6 @@
 remote_theme: pages-themes/cayman@v0.2.0
 plugins:
 - jekyll-remote-theme
+
+title: 7 Segment Display Addon for Blender
+show_downloads: true
