@@ -20,7 +20,8 @@ The addon main panel is located in `3D View > Right sidebar > Segment display`
 
 ## Downloads
 
-Download from [releases](https://github.com/xDUDSSx/segment-display-blender-addon/releases).
+Download `SegmentAddon.zip` from [releases](https://github.com/xDUDSSx/segment-display-blender-addon/releases).  
+Alternatively you can zip the `SegmentAddon` folder yourself after cloning the repo.
 
 ## Documentation
 
