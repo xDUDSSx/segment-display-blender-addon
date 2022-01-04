@@ -1,37 +1,33 @@
-## Welcome to GitHub Pages
+# 7 Segment Display Add-on
+**A Blender addon for generating animatable 7 segment displays**
 
-You can use the [editor on GitHub](https://github.com/xDUDSSx/segment-display-blender-addon/edit/gh-pages/index.md) to maintain and preview the content for your website in Markdown files.
+## Features
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+- Generate displays showing any number or time (hours, minutes, seconds and ms)
+- Displays can show static values or be animated by the addon
+  - For example show the current animation frame or count up or down in some timeframe between set values
+- Customizable colors and styles
+- Powered by nodes but using real geometry
 
-### Markdown
+![](images/segment_cover.png)
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+## Installation
 
-```markdown
-Syntax highlighted code block
+> **NOTE**: The addon is made for Blender version 3.0.0+
 
-# Header 1
-## Header 2
-### Header 3
+Can be installed like usual by installing the addons _.zip_ archive through the Blender preferences window.  
+The addon main panel is located in `3D View > Right sidebar > Segment display`
 
-- Bulleted
-- List
+## Downloads
 
-1. Numbered
-2. List
+Download from [releases](https://github.com/xDUDSSx/segment-display-blender-addon/releases).
 
-**Bold** and _Italic_ and `Code` text
+## Documentation
 
-[Link](url) and ![Image](src)
-```
+[User guide and technical explanation (**in czech**)](documentation_czech.adoc)
 
-For more details see [Basic writing and formatting syntax](https://docs.github.com/en/github/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
+## Sources
 
-### Jekyll Themes
+[Sharkigator segment display blogpost, original idea](https://sharkigator.wordpress.com/2016/01/15/7-segment-display-tutorial)
 
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/xDUDSSx/segment-display-blender-addon/settings/pages). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://docs.github.com/categories/github-pages-basics/) or [contact support](https://support.github.com/contact) and we’ll help you sort it out.
+[Video from Jonathan Kron, inspiration for the LCD shader](https://www.youtube.com/watch?v=fJ1WBx3kJaQ)
