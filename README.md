@@ -1,4 +1,4 @@
-# 7 Segment Display Add-on
+# 7 Segment Display Addon
 **A Blender addon for generating animatable 7 segment displays**
 
 ## Features
