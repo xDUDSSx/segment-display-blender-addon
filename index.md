@@ -24,7 +24,7 @@ Download `SegmentAddon.zip` from [releases](https://github.com/xDUDSSx/segment-d
 
 ## Documentation
 
-[User guide and technical explanation (**in czech**)](documentation_czech.adoc)
+[User guide and technical explanation (**in czech**)](https://github.com/xDUDSSx/segment-display-blender-addon/blob/master/documentation_czech.adoc)
 
 ## Sources
 
