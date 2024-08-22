@@ -10,8 +10,8 @@ bl_info = {
 	"name": "Segment Display Generator",
 	"description": "Generates 7 segment displays in various formats and styles.",
 	"author": "DUDSS",
-	"version": (1, 0, 1),
-	"blender": (3, 0, 0),
+	"version": (1, 0, 2),
+	"blender": (4, 2, 1),
 	"location": "3D View > Right sidebar > Segment display",
 	"warning": "",
 	"doc_url": "https://github.com/xDUDSSx/segment-display-blender-addon",
@@ -624,7 +624,7 @@ class CreateDisplayOperator(bpy.types.Operator):
 				skew_value *= -1
 				bpy.ops.object.mode_set(mode='EDIT')
 				bpy.ops.mesh.select_all(action='SELECT')
-				bpy.ops.transform.shear(value=skew_value, orient_axis='Z', orient_axis_ortho='X', orient_type='GLOBAL')
+				bpy.ops.transform.shear(value=skew_value, orient_axis='Z', orient_type='GLOBAL')
 				bpy.ops.object.mode_set(mode='OBJECT')
 
 			# Delete background
@@ -650,7 +650,6 @@ class CreateDisplayOperator(bpy.types.Operator):
 								 'mirror': False},
 								 TRANSFORM_OT_translate={
 								'value': (0, 0, extrude_value),
-								'orient_axis_ortho': 'X',
 								'orient_type': 'NORMAL',
 								'constraint_axis': (False, False, True),
 								'mirror': False,
@@ -687,7 +686,6 @@ class CreateDisplayOperator(bpy.types.Operator):
 
 			bpy.ops.transform.translate(
 				value=(cursor[0], cursor[1], cursor[2]),
-				orient_axis_ortho='X',
 				orient_type='GLOBAL',
 				orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
 				orient_matrix_type='GLOBAL',
@@ -881,11 +879,11 @@ class SegmentAddon:
 
 		# Connect the shader group to the principled shader
 		principled = mat.node_tree.nodes['segment_principled']
-		mat.node_tree.links.new(shader_node_group.outputs[0], principled.inputs[0]) # Base
-		mat.node_tree.links.new(shader_node_group.outputs[1], principled.inputs[9]) # Roughness
-		mat.node_tree.links.new(shader_node_group.outputs[2], principled.inputs[19]) # Emission
-		mat.node_tree.links.new(shader_node_group.outputs[3], principled.inputs[20]) # Emission strength
-		mat.node_tree.links.new(shader_node_group.outputs[4], principled.inputs[22]) # Normal
+		mat.node_tree.links.new(shader_node_group.outputs[0], principled.inputs['Base Color']) # Base
+		mat.node_tree.links.new(shader_node_group.outputs[1], principled.inputs['Roughness']) # Roughness
+		mat.node_tree.links.new(shader_node_group.outputs[2], principled.inputs['Emission Color']) # Emission
+		mat.node_tree.links.new(shader_node_group.outputs[3], principled.inputs['Emission Strength']) # Emission strength
+		mat.node_tree.links.new(shader_node_group.outputs[4], principled.inputs['Normal']) # Normal
 
 	def create_display_style_shader(self, mat):
 		node_tree = None
@@ -1043,7 +1041,7 @@ class SegmentAddon:
 		Assumes:
 		No materials / slots
 		"Segment" vertex color map defining segments
-		"segments" face map for active areas
+		"segments" boolean face attribute for active areas
 		"""
 		obj = Utils.copy_object(digit_prototype)
 		obj.location = (0, 0, 0)
@@ -1053,20 +1051,7 @@ class SegmentAddon:
 		bpy.context.view_layer.objects.active = obj
 		obj.select_set(True)
 
-		bpy.ops.object.mode_set(mode='EDIT')
-
-		# Select segments face map
-		bpy.ops.mesh.select_all(action='DESELECT')
-		obj.face_maps.active_index = bpy.context.object.face_maps['segments'].index
-		bpy.ops.object.face_map_select()
-
-		# Add materials
-		obj.data.materials.append(self.resource.materials[1])
-		obj.data.materials.append(self.resource.materials[0])
-		obj.active_material_index = 1
-		bpy.ops.object.material_slot_assign()
-
-		bpy.ops.object.mode_set(mode='OBJECT')
+		self.assign_segment_materials()
 
 		mesh = obj.data
 		self.create_vertex_color_map(mesh, "Digit", digit)
@@ -1085,7 +1070,7 @@ class SegmentAddon:
 		Assumes:
 		No materials / slots
 		No vertex colors
-		"segments" face map for active areas
+		"segments" boolean face attribute for active areas
 		"""
 		obj = self.create_segment(prototype)
 
@@ -1118,18 +1103,22 @@ class SegmentAddon:
 		Uses operators on context.object
 		"""
 		bpy.ops.object.mode_set(mode='EDIT')
-
+		
 		# Select segments face map
 		bpy.ops.mesh.select_all(action = 'DESELECT')
-		bpy.context.object.face_maps.active_index = bpy.context.object.face_maps['segments'].index
-		bpy.ops.object.face_map_select()
+		bpy.ops.mesh.select_mode(type='FACE')
+		
+		mesh = bpy.context.object.data;
+		mesh.attributes.active = mesh.attributes['segments']
+		bpy.ops.mesh.select_by_attribute()
 
 		# Add materials
 		bpy.context.object.data.materials.append(self.resource.materials[1])
 		bpy.context.object.data.materials.append(self.resource.materials[0])
 		bpy.context.object.active_material_index = 1
 		bpy.ops.object.material_slot_assign()
-
+		
+		bpy.ops.mesh.select_mode(type='VERT')
 		bpy.ops.object.mode_set(mode='OBJECT')
 
 	@staticmethod
